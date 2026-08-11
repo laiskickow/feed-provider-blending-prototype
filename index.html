@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feed Provider Blending &amp; Integration Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Murecho:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ============ TOPBAR ============ -->
+  <div class="topbar">
+    <div class="topbar__brand"><span class="dot"></span> Feed Provider Platform</div>
+    <div class="topbar__search">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input id="global-search" placeholder="Jump to sport, competition, event ID, provider…">
+      <span class="kbd">/</span>
+    </div>
+    <div class="topbar__spacer"></div>
+    <div class="topbar__actions">
+      <div class="icon-btn" id="theme-toggle" title="Toggle light/dark">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
+      </div>
+      <div class="icon-btn" id="notif-btn" title="Unmapped items">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span class="badge-count" id="unmapped-count">5</span>
+      </div>
+      <div class="icon-btn" title="m.tato">MT</div>
+    </div>
+  </div>
+
+  <!-- ============ SIDEBAR ============ -->
+  <div class="sidebar">
+    <div class="nav-section">
+      <div class="nav-section__label">Configuration</div>
+      <div class="nav-item active" data-view="blending-config">
+        <svg class="n-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Blending Configuration
+      </div>
+      <div class="nav-item" data-view="event-overrides">
+        <svg class="n-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+        Event Overrides
+      </div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section__label">Monitoring</div>
+      <div class="nav-item" data-view="automation">
+        <svg class="n-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        Automation &amp; Blending
+      </div>
+      <div class="nav-item" data-view="analytics">
+        <svg class="n-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="5" width="3" height="13"/></svg>
+        Provider Analytics
+      </div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section__label">Data</div>
+      <div class="nav-item" data-view="mappings">
+        <svg class="n-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M6 9v3a4 4 0 0 0 4 4h4"/></svg>
+        Provider Mappings
+        <span class="nav-item__badge" id="mapping-nav-badge">5</span>
+      </div>
+      <div class="nav-item" data-view="audit-log">
+        <svg class="n-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+        Audit Log
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MAIN ============ -->
+  <div class="main">
+
+    <!-- ============================================================ -->
+    <!-- LEVEL 1 — BLENDING CONFIGURATION                              -->
+    <!-- ============================================================ -->
+    <div class="view active" id="view-blending-config">
+      <div class="view-header">
+        <div>
+          <h1>Blending Configuration</h1>
+          <p>Default provider per Sport → Competition → Pre-Match/In-Play. Lowest configured level wins; unconfigured levels inherit upward.</p>
+        </div>
+        <div class="view-header__actions">
+          <button class="btn btn-tertiary" id="bc-expand-all">Expand all</button>
+          <button class="btn btn-primary" id="bc-save" disabled>Save changes</button>
+        </div>
+      </div>
+
+      <div id="bc-pending-alert" style="display:none;margin-bottom:12px;">
+        <div class="alert alert-info">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+          <div><strong>Unsaved changes</strong><span id="bc-pending-count">0</span> level(s) changed. Save to apply — new events created under these nodes will auto-assign to the selected provider.</div>
+        </div>
+      </div>
+
+      <div class="tree" id="hierarchy-tree"></div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- LEVEL 2 — EVENT OVERRIDES                                     -->
+    <!-- ============================================================ -->
+    <div class="view" id="view-event-overrides">
+      <div class="view-header">
+        <div>
+          <h1>Event Overrides</h1>
+          <p>Per-event provider overrides for Pre-Match and In-Play, independently. Overrides persist across status transitions until manually cleared.</p>
+        </div>
+        <div class="view-header__actions">
+          <button class="btn btn-tertiary" id="eo-save-preset">Save filter preset</button>
+        </div>
+      </div>
+
+      <div class="panel-split">
+        <div>
+          <div class="card card-pad" style="margin-bottom:12px;">
+            <div class="field">
+              <label>Sport</label>
+              <select class="select" id="eo-filter-sport"><option value="">All sports</option></select>
+            </div>
+            <div class="field">
+              <label>Competition</label>
+              <select class="select" id="eo-filter-competition"><option value="">All competitions</option></select>
+            </div>
+            <div class="field">
+              <label>Status</label>
+              <select class="select" id="eo-filter-status">
+                <option value="">Pre-Match &amp; In-Play</option>
+                <option value="pre-match">Pre-Match only</option>
+                <option value="in-play">In-Play only</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Time range</label>
+              <select class="select" id="eo-filter-range">
+                <option value="7">Next 7 days (default)</option>
+                <option value="1">Next 24 hours</option>
+                <option value="3">Next 3 days</option>
+                <option value="30">Next 30 days</option>
+                <option value="custom">Custom range…</option>
+              </select>
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <label>Has override</label>
+              <select class="select" id="eo-filter-override">
+                <option value="">Any</option>
+                <option value="yes">Overridden only</option>
+                <option value="no">Inherited only</option>
+              </select>
+            </div>
+          </div>
+          <div class="card card-pad">
+            <div style="font-size:11px;font-weight:600;color:var(--fg-muted);margin-bottom:6px;">SAVED PRESETS</div>
+            <div class="flex-gap-2" style="flex-wrap:wrap;">
+              <span class="ai-suggestion-chip">Live events only</span>
+              <span class="ai-suggestion-chip">Cricket — next 7d</span>
+              <span class="ai-suggestion-chip">Overridden events</span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex-between" style="margin-bottom:8px;">
+            <div class="flex-gap-2">
+              <span id="eo-result-count" class="muted" style="font-size:12px;"></span>
+            </div>
+            <div class="flex-gap-2" id="eo-bulk-bar" style="display:none;">
+              <span style="font-size:12px;font-weight:600;" id="eo-selected-count">0 selected</span>
+              <button class="btn btn-sm btn-secondary" id="eo-bulk-override">Bulk override…</button>
+              <button class="btn btn-sm btn-tertiary" id="eo-bulk-clear">Clear selection</button>
+            </div>
+          </div>
+          <div class="card" style="overflow:auto;max-height:640px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:28px;"></th>
+                  <th>Event</th>
+                  <th>Competition</th>
+                  <th>Start</th>
+                  <th>Status</th>
+                  <th>Pre-Match provider</th>
+                  <th>In-Play provider</th>
+                  <th style="width:40px;"></th>
+                </tr>
+              </thead>
+              <tbody id="events-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- LEVEL 3 — AUTOMATION & BLENDING                               -->
+    <!-- ============================================================ -->
+    <div class="view" id="view-automation">
+      <div class="view-header">
+        <div>
+          <h1>Automation &amp; Blending</h1>
+          <p>Read-only visualization of system-driven blending, fallback and gap coverage. Not user-configurable at this stage.</p>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <div class="tab active" data-tab="rules">Blending Rules</div>
+        <div class="tab" data-tab="health">Provider Health</div>
+        <div class="tab" data-tab="coverage">Coverage Dashboard</div>
+      </div>
+
+      <div class="tab-panel active" id="tab-rules">
+        <div id="blending-rules-list"></div>
+      </div>
+
+      <div class="tab-panel" id="tab-health">
+        <div class="grid-3" id="provider-health-cards" style="margin-bottom:20px;"></div>
+        <h3 style="font-size:14px;margin-bottom:10px;">Historical alerts — last 7 days</h3>
+        <div class="card" id="alerts-timeline"></div>
+      </div>
+
+      <div class="tab-panel" id="tab-coverage">
+        <div class="grid-2" style="align-items:stretch;">
+          <div class="card card-pad">
+            <h3 style="font-size:13px;margin-bottom:12px;">Coverage % — served vs. assigned</h3>
+            <div id="coverage-gauges" class="flex-gap-3" style="justify-content:space-between;"></div>
+          </div>
+          <div class="card card-pad">
+            <h3 style="font-size:13px;margin-bottom:12px;">Coverage gaps</h3>
+            <div id="coverage-gaps-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- PROVIDER MAPPINGS (GTH)                                       -->
+    <!-- ============================================================ -->
+    <div class="view" id="view-mappings">
+      <div class="view-header">
+        <div>
+          <h1>Provider Mappings</h1>
+          <p>Map external provider hierarchies to internal GTH. Unmapped items cannot be used as a default or in blending.</p>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <div class="tab active" data-tab="unmapped">Unmapped <span class="nav-item__badge" style="margin-left:6px;" id="unmapped-tab-badge">5</span></div>
+        <div class="tab" data-tab="active">Active mappings</div>
+        <div class="tab" data-tab="rejected">Rejected</div>
+      </div>
+
+      <div class="tab-panel active" id="tab-unmapped">
+        <div id="unmapped-list"></div>
+      </div>
+
+      <div class="tab-panel" id="tab-active">
+        <div class="card" style="overflow:auto;">
+          <table class="data-table">
+            <thead><tr><th>Provider</th><th>Provider path</th><th>GTH path</th><th>Last updated</th><th></th></tr></thead>
+            <tbody id="active-mappings-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-rejected">
+        <div class="card" style="overflow:auto;">
+          <table class="data-table">
+            <thead><tr><th>Provider</th><th>Provider path</th><th>Reason</th><th>By</th><th>Date</th><th></th></tr></thead>
+            <tbody id="rejected-mappings-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- PROVIDER ANALYTICS                                            -->
+    <!-- ============================================================ -->
+    <div class="view" id="view-analytics">
+      <div class="view-header">
+        <div>
+          <h1>Provider Analytics</h1>
+          <p>Performance and billing intelligence across providers.</p>
+        </div>
+        <div class="view-header__actions">
+          <select class="select" id="an-range" style="width:160px;">
+            <option value="7">Last 7 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="ytd">YTD</option>
+            <option value="custom">Custom range…</option>
+          </select>
+          <button class="btn btn-tertiary" id="an-compare">Comparison mode</button>
+          <button class="btn btn-tertiary" id="an-export">Export</button>
+        </div>
+      </div>
+
+      <div class="flex-gap-2" id="an-provider-filter" style="margin-bottom:14px;flex-wrap:wrap;"></div>
+
+      <div class="kpi-row" id="an-kpi-row"></div>
+
+      <div class="grid-2" style="margin-bottom:16px;">
+        <div class="card card-pad">
+          <div class="flex-between" style="margin-bottom:8px;">
+            <h3 style="font-size:13px;">Gross revenue by provider (14d trend)</h3>
+          </div>
+          <svg id="an-revenue-chart" width="100%" height="180" viewBox="0 0 560 180" preserveAspectRatio="none"></svg>
+          <div class="flex-gap-3" id="an-revenue-legend" style="margin-top:8px;flex-wrap:wrap;"></div>
+        </div>
+        <div class="card card-pad">
+          <h3 style="font-size:13px;margin-bottom:8px;">Number of bets (volume)</h3>
+          <svg id="an-bets-chart" width="100%" height="180" viewBox="0 0 560 180"></svg>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:auto;">
+        <table class="data-table">
+          <thead><tr><th>Provider</th><th>Revenue</th><th>Bets</th><th>Coverage %</th><th>Uptime %</th><th>Avg. latency</th><th>Margin %</th></tr></thead>
+          <tbody id="an-table-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- AUDIT LOG (new feature — see notes)                           -->
+    <!-- ============================================================ -->
+    <div class="view" id="view-audit-log">
+      <div class="view-header">
+        <div>
+          <h1>Audit Log</h1>
+          <p>Every configuration change across the platform — user, timestamp, before/after. Added as a companion screen to the audit-trail requirement in the PRD's non-functional section, which didn't specify a dedicated view.</p>
+        </div>
+        <div class="view-header__actions">
+          <button class="btn btn-tertiary" id="al-export">Export CSV</button>
+        </div>
+      </div>
+      <div class="card card-pad" style="margin-bottom:12px;display:flex;gap:12px;">
+        <select class="select" id="al-filter-area" style="width:220px;">
+          <option value="">All areas</option>
+          <option>Level 1 — Blending Config</option>
+          <option>Level 2 — Event Overrides</option>
+          <option>Provider Mappings</option>
+        </select>
+        <input class="input" id="al-filter-user" placeholder="Filter by user…" style="width:200px;">
+      </div>
+      <div class="card" style="overflow:auto;">
+        <table class="data-table">
+          <thead><tr><th>Timestamp</th><th>User</th><th>Area</th><th>Action</th><th>Detail</th></tr></thead>
+          <tbody id="audit-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============ OVERLAYS ============ -->
+<div class="overlay" id="overlay-validation">
+  <div class="modal">
+    <div class="modal__header">
+      <div>
+        <h3>Mapping incomplete — can't save</h3>
+        <p>This provider isn't fully mapped to your internal GTH hierarchy yet.</p>
+      </div>
+      <span class="close-x" data-close="overlay-validation">
+        <svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </span>
+    </div>
+    <div class="modal__body">
+      <div class="alert alert-error" style="margin-bottom:14px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+        <div><strong>Unmapped hierarchy items found</strong>Resolve these in Provider Mappings before this provider can be used as a default here.</div>
+      </div>
+      <div id="validation-unmapped-items"></div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn-tertiary" data-close="overlay-validation">Cancel</button>
+      <button class="btn btn-primary" id="validation-goto-mappings">Go to Provider Mappings</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay-confirm">
+  <div class="modal">
+    <div class="modal__header">
+      <div><h3 id="confirm-title">Confirm change</h3><p id="confirm-subtitle"></p></div>
+      <span class="close-x" data-close="overlay-confirm"><svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></span>
+    </div>
+    <div class="modal__body" id="confirm-body"></div>
+    <div class="modal__footer">
+      <button class="btn btn-tertiary" data-close="overlay-confirm">Cancel</button>
+      <button class="btn btn-primary" id="confirm-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay-reject">
+  <div class="modal">
+    <div class="modal__header">
+      <div><h3>Mark as "Do Not Map"</h3><p>This item will move to the Rejected list and stop triggering unmapped-item alerts.</p></div>
+      <span class="close-x" data-close="overlay-reject"><svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></span>
+    </div>
+    <div class="modal__body">
+      <div class="field">
+        <label>Reason</label>
+        <select class="select" id="reject-reason">
+          <option>Deprecated</option>
+          <option>Out of Scope</option>
+          <option>Low Volume</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="field" id="reject-other-field" style="display:none;">
+        <label>Details</label>
+        <textarea class="input" rows="3" id="reject-other-text" placeholder="Add a short explanation…"></textarea>
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn-tertiary" data-close="overlay-reject">Cancel</button>
+      <button class="btn btn-destructive" id="reject-confirm">Confirm rejection</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay-search-gth">
+  <div class="modal modal-lg">
+    <div class="modal__header">
+      <div><h3>Search GTH hierarchy</h3><p id="search-gth-subtitle">Find the correct internal match for this provider item.</p></div>
+      <span class="close-x" data-close="overlay-search-gth"><svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></span>
+    </div>
+    <div class="modal__body">
+      <input class="input" id="gth-search-input" placeholder="Type a sport, competition or market name…" style="margin-bottom:10px;">
+      <div id="gth-search-results"></div>
+      <div class="divider"></div>
+      <button class="btn btn-tertiary btn-block" id="gth-create-new">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        Can't find it — create in GTH
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Event override drawer -->
+<div class="drawer" id="drawer-override">
+  <div class="modal__header">
+    <div><h3 id="override-drawer-title">Override provider</h3><p id="override-drawer-subtitle"></p></div>
+    <span class="close-x" data-close-drawer="drawer-override"><svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></span>
+  </div>
+  <div class="modal__body" id="override-drawer-body"></div>
+  <div class="modal__footer">
+    <button class="btn btn-tertiary" data-close-drawer="drawer-override">Cancel</button>
+    <button class="btn btn-primary" id="override-apply">Apply override</button>
+  </div>
+</div>
+
+<div class="toast-stack" id="toast-stack"></div>
+
+<!-- ============ AI ASSISTANT ============ -->
+<div class="ai-fab" id="ai-fab">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4M8 16v0M16 16v0"/></svg>
+</div>
+<div class="ai-panel" id="ai-panel">
+  <div class="ai-panel__header">
+    <span class="status-dot"></span>
+    <h3>Configuration Assistant</h3>
+    <span class="close-x" style="margin-left:auto;" id="ai-close"><svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></span>
+  </div>
+  <div class="ai-panel__context" id="ai-context">Context: Blending Configuration</div>
+  <div class="ai-messages" id="ai-messages"></div>
+  <div class="ai-suggestions" id="ai-suggestions"></div>
+  <div class="ai-input-row">
+    <input class="input" id="ai-input" placeholder="e.g. Set BetRadar as default for Tennis">
+    <button class="btn btn-primary" id="ai-send">Send</button>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
