@@ -16,11 +16,14 @@
     <div class="topbar__brand"><span class="dot"></span> Feed Provider Platform</div>
     <div class="topbar__search">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-      <input id="global-search" placeholder="Jump to sport, competition, event ID, provider…">
+      <input id="global-search" placeholder="Search sports or competitions…">
       <span class="kbd">/</span>
     </div>
     <div class="topbar__spacer"></div>
     <div class="topbar__actions">
+      <div class="icon-btn" id="docs-btn" title="Documentation">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      </div>
       <div class="icon-btn" id="theme-toggle" title="Toggle light/dark">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
       </div>
@@ -49,7 +52,7 @@
       <div class="nav-section__label">Monitoring</div>
       <div class="nav-item" data-view="automation">
         <svg class="n-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-        Automation &amp; Blending
+        Automated Actions
       </div>
       <div class="nav-item" data-view="analytics">
         <svg class="n-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="5" width="3" height="13"/></svg>
@@ -84,6 +87,8 @@
         </div>
         <div class="view-header__actions">
           <button class="btn btn-tertiary" id="bc-expand-all">Expand all</button>
+          <button class="btn btn-tertiary" id="bc-collapse-all">Collapse all</button>
+          <button class="btn btn-tertiary" id="bc-export">Export CSV</button>
           <button class="btn btn-primary" id="bc-save" disabled>Save changes</button>
         </div>
       </div>
@@ -152,11 +157,7 @@
           </div>
           <div class="card card-pad">
             <div style="font-size:11px;font-weight:600;color:var(--fg-muted);margin-bottom:6px;">SAVED PRESETS</div>
-            <div class="flex-gap-2" style="flex-wrap:wrap;">
-              <span class="ai-suggestion-chip">Live events only</span>
-              <span class="ai-suggestion-chip">Cricket — next 7d</span>
-              <span class="ai-suggestion-chip">Overridden events</span>
-            </div>
+            <div class="flex-gap-2" style="flex-wrap:wrap;" id="eo-presets-list"></div>
           </div>
         </div>
 
@@ -182,7 +183,6 @@
                   <th>Status</th>
                   <th>Pre-Match provider</th>
                   <th>In-Play provider</th>
-                  <th style="width:40px;"></th>
                 </tr>
               </thead>
               <tbody id="events-tbody"></tbody>
@@ -198,25 +198,36 @@
     <div class="view" id="view-automation">
       <div class="view-header">
         <div>
-          <h1>Automation &amp; Blending</h1>
+          <h1>Automated Actions</h1>
           <p>Read-only visualization of system-driven blending, fallback and gap coverage. Not user-configurable at this stage.</p>
         </div>
       </div>
 
       <div class="tabs">
-        <div class="tab active" data-tab="rules">Blending Rules</div>
+        <div class="tab active" data-tab="log">Automation Log</div>
         <div class="tab" data-tab="health">Provider Health</div>
         <div class="tab" data-tab="coverage">Coverage Dashboard</div>
       </div>
 
-      <div class="tab-panel active" id="tab-rules">
-        <div id="blending-rules-list"></div>
+      <div class="tab-panel active" id="tab-log">
+        <div class="card card-pad flex-gap-2" style="margin-bottom:12px;flex-wrap:wrap;">
+          <select class="select input-sm" id="log-filter-provider" style="width:160px;"><option value="">All providers</option></select>
+          <select class="select input-sm" id="log-filter-type" style="width:170px;">
+            <option value="">All action types</option>
+            <option value="outage">Outage triggered</option>
+            <option value="fallback">Fallback activated</option>
+            <option value="recovered">Provider recovered</option>
+            <option value="degraded">Degraded</option>
+            <option value="gap-fill">Gap coverage</option>
+          </select>
+          <input class="input input-sm" id="log-filter-text" placeholder="Search sport, competition, description…" style="width:260px;">
+          <button class="btn btn-sm btn-tertiary" id="log-export" style="margin-left:auto;">Export CSV</button>
+        </div>
+        <div class="card" id="automation-log-list"></div>
       </div>
 
       <div class="tab-panel" id="tab-health">
         <div class="grid-3" id="provider-health-cards" style="margin-bottom:20px;"></div>
-        <h3 style="font-size:14px;margin-bottom:10px;">Historical alerts — last 7 days</h3>
-        <div class="card" id="alerts-timeline"></div>
       </div>
 
       <div class="tab-panel" id="tab-coverage">
@@ -245,30 +256,59 @@
       </div>
 
       <div class="tabs">
-        <div class="tab active" data-tab="unmapped">Unmapped <span class="nav-item__badge" style="margin-left:6px;" id="unmapped-tab-badge">5</span></div>
-        <div class="tab" data-tab="active">Active mappings</div>
-        <div class="tab" data-tab="rejected">Rejected</div>
+        <div class="tab active" data-tab="suggested">Suggested Maps <span class="nav-item__badge" style="margin-left:6px;" id="suggested-tab-badge">5</span></div>
+        <div class="tab" data-tab="active">Active Mappings</div>
+        <div class="tab" data-tab="unmapped">Unmapped <span class="nav-item__badge" style="margin-left:6px;" id="unmapped-tab-badge">2</span></div>
       </div>
 
-      <div class="tab-panel active" id="tab-unmapped">
-        <div id="unmapped-list"></div>
-      </div>
-
-      <div class="tab-panel" id="tab-active">
+      <!-- SUGGESTED MAPS -->
+      <div class="tab-panel active" id="tab-suggested">
+        <div class="card card-pad flex-gap-2" id="filterbar-suggested" style="margin-bottom:12px;flex-wrap:wrap;"></div>
         <div class="card" style="overflow:auto;">
-          <table class="data-table">
-            <thead><tr><th>Provider</th><th>Provider path</th><th>GTH path</th><th>Last updated</th><th></th></tr></thead>
-            <tbody id="active-mappings-tbody"></tbody>
+          <table class="data-table" id="table-suggested">
+            <thead></thead>
+            <tbody></tbody>
           </table>
         </div>
       </div>
 
-      <div class="tab-panel" id="tab-rejected">
-        <div class="card" style="overflow:auto;">
-          <table class="data-table">
-            <thead><tr><th>Provider</th><th>Provider path</th><th>Reason</th><th>By</th><th>Date</th><th></th></tr></thead>
-            <tbody id="rejected-mappings-tbody"></tbody>
-          </table>
+      <!-- ACTIVE MAPPINGS -->
+      <div class="tab-panel" id="tab-active">
+        <div class="tabs">
+          <div class="tab active" data-tab="active-competitions">Competitions</div>
+          <div class="tab" data-tab="active-markettypes">Market Types</div>
+        </div>
+        <div class="tab-panel active" id="tab-active-competitions">
+          <div class="card card-pad flex-gap-2" id="filterbar-active-competitions" style="margin-bottom:12px;flex-wrap:wrap;"></div>
+          <div class="card" style="overflow:auto;">
+            <table class="data-table" id="table-active-competitions"><thead></thead><tbody></tbody></table>
+          </div>
+        </div>
+        <div class="tab-panel" id="tab-active-markettypes">
+          <div class="card card-pad flex-gap-2" id="filterbar-active-markettypes" style="margin-bottom:12px;flex-wrap:wrap;"></div>
+          <div class="card" style="overflow:auto;">
+            <table class="data-table" id="table-active-markettypes"><thead></thead><tbody></tbody></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- UNMAPPED (unmapped + rejected) -->
+      <div class="tab-panel" id="tab-unmapped">
+        <div class="tabs">
+          <div class="tab active" data-tab="unmapped-competitions">Competitions</div>
+          <div class="tab" data-tab="unmapped-markettypes">Market Types</div>
+        </div>
+        <div class="tab-panel active" id="tab-unmapped-competitions">
+          <div class="card card-pad flex-gap-2" id="filterbar-unmapped-competitions" style="margin-bottom:12px;flex-wrap:wrap;"></div>
+          <div class="card" style="overflow:auto;">
+            <table class="data-table" id="table-unmapped-competitions"><thead></thead><tbody></tbody></table>
+          </div>
+        </div>
+        <div class="tab-panel" id="tab-unmapped-markettypes">
+          <div class="card card-pad flex-gap-2" id="filterbar-unmapped-markettypes" style="margin-bottom:12px;flex-wrap:wrap;"></div>
+          <div class="card" style="overflow:auto;">
+            <table class="data-table" id="table-unmapped-markettypes"><thead></thead><tbody></tbody></table>
+          </div>
         </div>
       </div>
     </div>
@@ -473,7 +513,18 @@
   </div>
 </div>
 
-<script src="data.js"></script>
-<script src="app.js"></script>
+<!-- ============ DOCUMENTATION PANEL ============ -->
+<div class="ai-panel" id="docs-panel">
+  <div class="ai-panel__header">
+    <h3>Documentation</h3>
+    <span class="close-x" style="margin-left:auto;" id="docs-close"><svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></span>
+  </div>
+  <div class="ai-panel__context">What this tool is, PRD requirements per screen, and what's been added beyond the PRD.</div>
+  <div class="ai-messages" id="docs-body" style="display:block;"></div>
+</div>
+
+<script src="data.js?v=2"></script>
+<script src="docs.js?v=2"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>

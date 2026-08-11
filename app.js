@@ -15,6 +15,9 @@ const ICONS = {
   info:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>`,
   more:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/></svg>`,
   search:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>`,
+  arrowRight: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>`,
+  sportIcon: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--fg-muted);flex:none;"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>`,
+  competitionIcon: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--fg-muted);flex:none;"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>`,
 };
 
 function relTime(iso){
@@ -27,6 +30,9 @@ function relTime(iso){
 function fmtDate(d){ return new Date(d).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }
 function fmtMoney(n){ return '£' + n.toLocaleString('en-GB',{maximumFractionDigits:0}); }
 function fmtNum(n){ return n.toLocaleString('en-GB'); }
+function sportName(id){ return SPORTS.find(s=>s.id===id)?.name || id; }
+function competitionName(id){ return SPORTS.flatMap(s=>s.competitions).find(c=>c.id===id)?.name || id; }
+function sportByCompetitionId(compId){ return SPORTS.find(s=>s.competitions.some(c=>c.id===compId)); }
 function providerChip(id, opts={}){
   if (!id) return `<span class="provider-chip inherited">Not set</span>`;
   const p = providerById(id); if(!p) return '';
@@ -64,22 +70,39 @@ function logAudit(area, action, detail){
   AUDIT_LOG.unshift({ ts:new Date().toISOString(), user:'m.tato', area, action, detail });
   if (document.getElementById('view-audit-log').classList.contains('active')) renderAuditLog();
 }
-function refreshMappingCounts(){
-  document.getElementById('unmapped-count').textContent = UNMAPPED_ITEMS.length;
-  document.getElementById('mapping-nav-badge').textContent = UNMAPPED_ITEMS.length;
-  document.getElementById('unmapped-tab-badge').textContent = UNMAPPED_ITEMS.length;
-  const notif = document.getElementById('notif-btn');
-  if (UNMAPPED_ITEMS.length === 0){ notif.querySelector('.badge-count').style.display='none'; } else { notif.querySelector('.badge-count').style.display='flex'; }
+
+// Generic client-side CSV download — no backend, works straight from the browser.
+function downloadCSV(filename, headers, rows){
+  const esc = v => `"${String(v??'').replace(/"/g,'""')}"`;
+  const csv = [headers.map(esc).join(','), ...rows.map(r=>r.map(esc).join(','))].join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
 /* ============================================================
-   NAV / VIEW SWITCHING
+   NAV / VIEW SWITCHING + CONTEXT-AWARE HEADER SEARCH
    ============================================================ */
 const VIEW_LABELS = {
   'blending-config':'Blending Configuration', 'event-overrides':'Event Overrides',
-  'automation':'Automation & Blending', 'analytics':'Provider Analytics',
+  'automation':'Automated Actions', 'analytics':'Provider Analytics',
   'mappings':'Provider Mappings', 'audit-log':'Audit Log'
 };
+let bcSearchQuery = '';
+let eoSearchQuery = '';
+function updateHeaderSearchForView(view){
+  const input = document.getElementById('global-search');
+  if (view === 'blending-config'){ input.disabled=false; input.placeholder='Search sports or competitions…'; input.value=bcSearchQuery; }
+  else if (view === 'event-overrides'){ input.disabled=false; input.placeholder='Search by event ID or name…'; input.value=eoSearchQuery; }
+  else { input.disabled=true; input.placeholder='Search available on Blending Configuration & Event Overrides'; input.value=''; }
+}
+document.getElementById('global-search').addEventListener('input', function(){
+  const view = document.querySelector('.nav-item.active')?.dataset.view;
+  if (view === 'blending-config'){ bcSearchQuery = this.value; renderHierarchyTree(); }
+  else if (view === 'event-overrides'){ eoSearchQuery = this.value; renderEventsTable(); }
+});
+
 document.querySelectorAll('.nav-item[data-view]').forEach(item=>{
   item.addEventListener('click', ()=>{
     document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -88,16 +111,20 @@ document.querySelectorAll('.nav-item[data-view]').forEach(item=>{
     document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
     document.getElementById('view-'+view).classList.add('active');
     document.getElementById('ai-context').textContent = 'Context: ' + VIEW_LABELS[view];
+    updateHeaderSearchForView(view);
     if (view === 'audit-log') renderAuditLog();
   });
 });
+// Tabs (also handles nested sub-tabs, e.g. Active Mappings > Competitions/Market Types) —
+// scoped to direct-child tab-panels so an outer tab switch never disturbs a nested one.
 document.querySelectorAll('.tabs').forEach(tabbar=>{
   tabbar.querySelectorAll('.tab').forEach(tab=>{
-    tab.addEventListener('click', ()=>{
+    tab.addEventListener('click', (e)=>{
+      e.stopPropagation();
       tabbar.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
       tab.classList.add('active');
       const panelWrap = tabbar.parentElement;
-      panelWrap.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+      panelWrap.querySelectorAll(':scope > .tab-panel').forEach(p=>p.classList.remove('active'));
       panelWrap.querySelector('#tab-'+tab.dataset.tab).classList.add('active');
     });
   });
@@ -111,12 +138,11 @@ document.getElementById('theme-toggle').addEventListener('click', ()=>{
   renderRevenueChart(); renderBetsChart(); // re-render svg charts w/ theme-aware colors
 });
 
-document.getElementById('notif-btn').addEventListener('click', ()=>{
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-  document.querySelector('.nav-item[data-view="mappings"]').classList.add('active');
-  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-  document.getElementById('view-mappings').classList.add('active');
-});
+document.getElementById('notif-btn').addEventListener('click', ()=> document.querySelector('.nav-item[data-view="mappings"]').click());
+
+/* Documentation panel */
+document.getElementById('docs-btn').addEventListener('click', ()=>{ renderDocsPanel(); document.getElementById('docs-panel').classList.add('open'); });
+document.getElementById('docs-close').addEventListener('click', ()=> document.getElementById('docs-panel').classList.remove('open'));
 
 /* ============================================================
    LEVEL 1 — BLENDING CONFIGURATION (hierarchy tree)
@@ -152,7 +178,14 @@ function providerOptions(selectedId, includeInherit, inheritLabel){
 
 function renderHierarchyTree(){
   const root = document.getElementById('hierarchy-tree');
+  const q = bcSearchQuery.trim().toLowerCase();
   root.innerHTML = SPORTS.map(sport=>{
+    const compMatches = sport.competitions.filter(c=>c.name.toLowerCase().includes(q));
+    const sportMatches = sport.name.toLowerCase().includes(q);
+    if (q && !sportMatches && compMatches.length===0) return '';
+    const visibleComps = (q && !sportMatches) ? compMatches : sport.competitions;
+    if (q) openTreeNodes.add('sport-'+sport.id);
+
     const sportKey = `sport:${sport.id}`;
     const sportVal = (sportKey in pendingHierarchy) ? pendingHierarchy[sportKey] : sport.defaultProvider;
     const isPending = sportKey in pendingHierarchy;
@@ -161,33 +194,35 @@ function renderHierarchyTree(){
     <div class="tree-node" data-sport="${sport.id}">
       <div class="tree-row ${sportOpen?'open':''}" data-toggle="sport-${sport.id}" style="${isPending?'background:var(--bg-warning);':''}">
         ${ICONS.chevron}
+        ${ICONS.sportIcon}
         <span class="name">${sport.name}</span>
-        <span class="count">${sport.competitions.length} competitions</span>
-        <div class="tree-row__meta" onclick="event.stopPropagation()">
-          <select class="select input-sm" style="width:150px;" onchange="onHierarchyChange('${sportKey}', this.value)">
-            ${providerOptions(sportVal, false, '')}
-          </select>
+        <select class="select input-sm" style="width:150px;margin-left:8px;" onclick="event.stopPropagation()" onchange="onHierarchyChange('${sportKey}', this.value)">
+          ${providerOptions(sportVal, false, '')}
+        </select>
+        <div class="tree-row__meta">
+          <span class="count">${visibleComps.length} competitions</span>
           ${isPending?'<span class="badge badge-yellow">unsaved</span>':''}
         </div>
       </div>
       <div class="tree-children tree-lvl2 ${sportOpen?'open':''}" id="sport-${sport.id}">
-        ${sport.competitions.map(comp=>{
+        ${visibleComps.map(comp=>{
           const compKey = `comp:${comp.id}`;
           const eff = effectiveCompProvider(sport, comp);
           const isPendingComp = compKey in pendingHierarchy;
           const mapped = isMapped(eff.value, comp.id);
-          const compOpen = openTreeNodes.has('comp-'+comp.id);
+          const compOpen = openTreeNodes.has('comp-'+comp.id) || !!q;
           return `
           <div class="tree-node" data-comp="${comp.id}">
             <div class="tree-row ${compOpen?'open':''}" data-toggle="comp-${comp.id}" style="${isPendingComp?'background:var(--bg-warning);':''}">
               ${ICONS.chevron}
+              ${ICONS.competitionIcon}
               <span class="name">${comp.name}</span>
-              <span class="count">${comp.events} events</span>
-              <div class="tree-row__meta" onclick="event.stopPropagation()">
+              <select class="select input-sm" style="width:170px;margin-left:8px;" onclick="event.stopPropagation()" onchange="onHierarchyChange('${compKey}', this.value)">
+                ${providerOptions(compKey in pendingHierarchy ? pendingHierarchy[compKey] : comp.defaultProvider, true, `Inherit from ${sport.name} (${providerById(sportVal)?.name||'none'})`)}
+              </select>
+              <div class="tree-row__meta">
                 ${!mapped?`<span title="Provider not mapped to GTH for this competition">${ICONS.alert.replace('<svg ', '<svg style="width:14px;height:14px;color:var(--fg-error)" ')}</span>`:''}
-                <select class="select input-sm" style="width:170px;" onchange="onHierarchyChange('${compKey}', this.value)">
-                  ${providerOptions(compKey in pendingHierarchy ? pendingHierarchy[compKey] : comp.defaultProvider, true, `Inherit from ${sport.name} (${providerById(sportVal)?.name||'none'})`)}
-                </select>
+                <span class="count">${comp.events} events</span>
                 ${isPendingComp?'<span class="badge badge-yellow">unsaved</span>':''}
               </div>
             </div>
@@ -198,16 +233,16 @@ function renderHierarchyTree(){
                 const eff2 = effectiveMatchTypeProvider(sport, comp, mt);
                 const isPendingMt = key in pendingHierarchy;
                 const mtMapped = isMapped(eff2.value, comp.id, mt);
-                const inheritedName = eff2.source !== 'own' && eff2.source !== 'pending' ? (providerById(eff.value)?.name || providerById(sportVal)?.name || 'none') : null;
                 return `
                 <div class="tree-row" style="${isPendingMt?'background:var(--bg-warning);':''}">
                   <span style="width:12px;"></span>
+                  <span class="matchtype-dot ${mt}"></span>
                   <span class="name" style="font-weight:500;">${label}</span>
+                  <select class="select input-sm" style="width:190px;margin-left:8px;" onchange="onHierarchyChange('${key}', this.value)">
+                    ${providerOptions(key in pendingHierarchy ? pendingHierarchy[key] : (MATCHTYPE_DEFAULTS[key]||''), true, `Inherit (${providerById(eff2.value)?.name || 'none'})`)}
+                  </select>
                   <div class="tree-row__meta">
                     ${!mtMapped?`<span title="Provider not mapped to GTH">${ICONS.alert.replace('<svg ', '<svg style="width:13px;height:13px;color:var(--fg-error)" ')}</span>`:''}
-                    <select class="select input-sm" style="width:190px;" onchange="onHierarchyChange('${key}', this.value)">
-                      ${providerOptions(key in pendingHierarchy ? pendingHierarchy[key] : (MATCHTYPE_DEFAULTS[key]||''), true, `Inherit (${providerById(eff2.value)?.name || 'none'})`)}
-                    </select>
                     ${isPendingMt?'<span class="badge badge-yellow">unsaved</span>':''}
                   </div>
                 </div>`;
@@ -217,7 +252,7 @@ function renderHierarchyTree(){
         }).join('')}
       </div>
     </div>`;
-  }).join('');
+  }).join('') || `<div class="empty-state">No sports or competitions match “${bcSearchQuery}”.</div>`;
 
   root.querySelectorAll('[data-toggle]').forEach(row=>{
     row.addEventListener('click', ()=>{
@@ -244,6 +279,22 @@ document.getElementById('bc-expand-all').addEventListener('click', ()=>{
   SPORTS.forEach(s=>{ openTreeNodes.add('sport-'+s.id); s.competitions.forEach(c=>openTreeNodes.add('comp-'+c.id)); });
   renderHierarchyTree();
 });
+document.getElementById('bc-collapse-all').addEventListener('click', ()=>{
+  openTreeNodes.clear();
+  renderHierarchyTree();
+});
+document.getElementById('bc-export').addEventListener('click', ()=>{
+  const headers = ['Sport','Competition','Match Type','Effective Provider','Source','GTH Mapped'];
+  const rows = [];
+  SPORTS.forEach(sport=> sport.competitions.forEach(comp=>{
+    ['prematch','inplay'].forEach(mt=>{
+      const eff = effectiveMatchTypeProvider(sport, comp, mt);
+      rows.push([sport.name, comp.name, mt==='prematch'?'Pre-Match':'In-Play', providerById(eff.value)?.name || '(none)', eff.source, isMapped(eff.value, comp.id, mt)?'Yes':'No']);
+    });
+  }));
+  downloadCSV('blending_configuration.csv', headers, rows);
+  toast('success','Export ready', 'blending_configuration.csv downloaded.');
+});
 
 document.getElementById('bc-save').addEventListener('click', ()=>{
   // validate every pending change against GTH mapping
@@ -252,7 +303,6 @@ document.getElementById('bc-save').addEventListener('click', ()=>{
     if (!providerId) return;
     if (key.startsWith('sport:')){
       const sportId = key.split(':')[1];
-      // sport-level: check across all its competitions for a representative unmapped signal
       const sport = SPORTS.find(s=>s.id===sportId);
       sport.competitions.forEach(c=>{ if(!isMapped(providerId, c.id)) unmapped.push({providerId, path:`${providerById(providerId).name} → ${sport.name} → ${c.name}`}); });
     } else if (key.startsWith('comp:')){
@@ -288,6 +338,7 @@ document.getElementById('bc-save').addEventListener('click', ()=>{
   });
   Object.keys(pendingHierarchy).forEach(k=>delete pendingHierarchy[k]);
   renderHierarchyTree();
+  renderEventsTable();
   toast('success', 'Configuration saved', `${count} level(s) updated. New events under these nodes will auto-assign to the selected provider.`);
 });
 document.getElementById('validation-goto-mappings').addEventListener('click', ()=>{
@@ -321,6 +372,7 @@ function filteredEvents(){
   const status = document.getElementById('eo-filter-status').value;
   const range = document.getElementById('eo-filter-range').value;
   const hasOverride = document.getElementById('eo-filter-override').value;
+  const q = eoSearchQuery.trim().toLowerCase();
   return EVENTS.filter(e=>{
     if (sport && e.sport !== sport) return false;
     if (comp && e.competition !== comp) return false;
@@ -330,32 +382,54 @@ function filteredEvents(){
       const diffH = (e.start - now)/3600000;
       if (diffH > maxH || diffH < -6) return false;
     }
-    if (hasOverride === 'yes' && !e.override) return false;
-    if (hasOverride === 'no' && e.override) return false;
+    const overridden = !!(e.overrides.prematch || e.overrides.inplay);
+    if (hasOverride === 'yes' && !overridden) return false;
+    if (hasOverride === 'no' && overridden) return false;
+    if (q && !(e.id.toLowerCase().includes(q) || e.name.toLowerCase().includes(q))) return false;
     return true;
   }).sort((a,b)=>a.start-b.start);
 }
 
-function competitionName(id){ return SPORTS.flatMap(s=>s.competitions).find(c=>c.id===id)?.name || id; }
+// The effective provider for a slot is always computed live from the Level-1
+// hierarchy, unless this event has an override for that specific slot.
+function effectiveEventProvider(evt, matchType){
+  const ov = evt.overrides[matchType];
+  if (ov) return { value: ov.provider, overridden:true, meta:ov };
+  const sport = sportByCompetitionId(evt.competition);
+  const comp = sport.competitions.find(c=>c.id===evt.competition);
+  const eff = effectiveMatchTypeProvider(sport, comp, matchType);
+  return { value: eff.value, overridden:false };
+}
+
+function inlineProviderSelect(evt, matchType){
+  const eff = effectiveEventProvider(evt, matchType);
+  const mapped = isMapped(eff.value, evt.competition, matchType);
+  const sport = sportByCompetitionId(evt.competition);
+  const comp = sport.competitions.find(c=>c.id===evt.competition);
+  const defaultProv = effectiveMatchTypeProvider(sport, comp, matchType).value;
+  const options = `<option value="">Use default (${providerById(defaultProv)?.name || 'none'})</option>` +
+    PROVIDERS.map(p=>`<option value="${p.id}" ${eff.overridden && eff.value===p.id ? 'selected' : ''}>${p.name}</option>`).join('');
+  const cls = eff.overridden ? 'override-select override-select--active' : 'override-select';
+  const errStyle = !mapped ? 'border-color:var(--border-error);' : '';
+  return `<select class="select input-sm ${cls}" style="width:180px;${errStyle}" onchange="onInlineOverrideChange('${evt.id}','${matchType}', this.value)">${options}</select>`;
+}
 
 function renderEventsTable(){
   const rows = filteredEvents();
   document.getElementById('eo-result-count').textContent = `${rows.length} event${rows.length!==1?'s':''}`;
   document.getElementById('events-tbody').innerHTML = rows.map(e=>{
-    const preOverridden = e.override && e.override.type==='pre-match';
-    const inOverridden = e.override && e.override.type==='in-play';
+    const overridden = !!(e.overrides.prematch || e.overrides.inplay);
     return `
-    <tr data-evt="${e.id}" class="${selectedEvents.has(e.id)?'selected':''}">
+    <tr data-evt="${e.id}" class="${selectedEvents.has(e.id)?'selected':''} ${overridden?'row-override':''}">
       <td><div class="checkbox ${selectedEvents.has(e.id)?'checked':''}" onclick="toggleEventSelect('${e.id}')">${selectedEvents.has(e.id)?ICONS.check:''}</div></td>
       <td><strong>${e.name}</strong><br><span class="mono">${e.id}</span></td>
       <td>${competitionName(e.competition)}</td>
       <td>${fmtDate(e.start)}<br><span class="muted" style="font-size:11px;">${relTime(e.start)}</span></td>
       <td>${statusBadge(e.status)}</td>
-      <td>${providerChip(e.preMatchProvider, {override:preOverridden})}</td>
-      <td>${providerChip(e.inPlayProvider, {override:inOverridden})}</td>
-      <td><span class="icon-btn" style="width:24px;height:24px;" onclick="openOverrideDrawer('${e.id}')">${ICONS.more}</span></td>
+      <td>${inlineProviderSelect(e,'prematch')}</td>
+      <td>${inlineProviderSelect(e,'inplay')}</td>
     </tr>`;
-  }).join('') || `<tr><td colspan="8"><div class="empty-state">No events match these filters.</div></td></tr>`;
+  }).join('') || `<tr><td colspan="7"><div class="empty-state">No events match these filters.</div></td></tr>`;
 }
 function toggleEventSelect(id){
   if (selectedEvents.has(id)) selectedEvents.delete(id); else selectedEvents.add(id);
@@ -366,80 +440,131 @@ function toggleEventSelect(id){
 }
 document.getElementById('eo-bulk-clear').addEventListener('click', ()=>{ selectedEvents.clear(); renderEventsTable(); document.getElementById('eo-bulk-bar').style.display='none'; });
 
-function openOverrideDrawer(eventId, bulkIds){
-  const isBulk = Array.isArray(bulkIds) && bulkIds.length>1;
-  const e = isBulk ? null : EVENTS.find(ev=>ev.id===eventId);
-  document.getElementById('override-drawer-title').textContent = isBulk ? `Bulk override — ${bulkIds.length} events` : `Override — ${e.name}`;
-  document.getElementById('override-drawer-subtitle').textContent = isBulk ? 'Applies the selected provider(s) to every selected event.' : `${e.id} · ${competitionName(e.competition)}`;
+function onInlineOverrideChange(eventId, matchType, value){
+  const evt = EVENTS.find(e=>e.id===eventId);
+  const label = matchType==='prematch' ? 'Pre-Match' : 'In-Play';
+  if (!value){
+    evt.overrides[matchType] = null;
+    logAudit('Level 2 — Event Overrides','Override cleared',`${evt.id}: ${label} reverted to default`);
+    toast('default','Reverted to default', `${evt.name} — ${label}`);
+  } else {
+    evt.overrides[matchType] = { provider:value, at:new Date().toISOString(), by:'m.tato' };
+    const mapped = isMapped(value, evt.competition, matchType);
+    logAudit('Level 2 — Event Overrides','Override applied',`${evt.id}: ${label} → ${providerById(value).name}`);
+    if (!mapped) toast('warning','Override applied — mapping conflict', `${providerById(value).name} isn't mapped to this competition yet.`);
+    else toast('success','Override applied', `${evt.name} — ${label} → ${providerById(value).name}`);
+  }
+  renderEventsTable();
+}
+
+// Bulk override (multi-select) still uses a drawer — the one case a single
+// inline cell can't cover.
+function openBulkOverrideDrawer(bulkIds){
+  document.getElementById('override-drawer-title').textContent = `Bulk override — ${bulkIds.length} events`;
+  document.getElementById('override-drawer-subtitle').textContent = 'Applies the selected provider(s) to every selected event. Leave a field blank to not touch that slot.';
   document.getElementById('override-drawer-body').innerHTML = `
     <div class="field">
       <label>Pre-Match provider</label>
       <select class="select" id="ov-prematch">
-        <option value="">Use default (no override)</option>
-        ${PROVIDERS.map(p=>`<option value="${p.id}" ${!isBulk && e.preMatchProvider===p.id && e.override?.type==='pre-match' ?'selected':''}>${p.name}</option>`).join('')}
+        <option value="">Don't change</option>
+        ${PROVIDERS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}
       </select>
-      <div class="hint" id="ov-prematch-hint"></div>
     </div>
     <div class="field">
       <label>In-Play provider</label>
       <select class="select" id="ov-inplay">
-        <option value="">Use default (no override)</option>
-        ${PROVIDERS.map(p=>`<option value="${p.id}" ${!isBulk && e.inPlayProvider===p.id && e.override?.type==='in-play' ?'selected':''}>${p.name}</option>`).join('')}
+        <option value="">Don't change</option>
+        ${PROVIDERS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}
       </select>
-      <div class="hint" id="ov-inplay-hint"></div>
     </div>
-    ${!isBulk && e.override ? `<div class="alert alert-info"><span>${ICONS.info}</span><div><strong>Existing override</strong>${e.override.type==='pre-match'?'Pre-Match':'In-Play'} → ${providerById(e.override.provider).name}, applied ${fmtDate(e.override.at)} by ${e.override.by}.</div></div>` : ''}
   `;
-  const checkConflict = (selectId, hintId, compId, mt) => {
-    document.getElementById(selectId).addEventListener('change', function(){
-      const val = this.value;
-      const hint = document.getElementById(hintId);
-      if (val && !isMapped(val, compId, mt)){
-        hint.innerHTML = `<span style="color:var(--fg-error);">${providerById(val).name} isn't mapped to this competition yet — override will be flagged as a conflict.</span>`;
-      } else hint.textContent = '';
-    });
-  };
-  if (!isBulk){ checkConflict('ov-prematch','ov-prematch-hint', e.competition, 'prematch'); checkConflict('ov-inplay','ov-inplay-hint', e.competition, 'inplay'); }
-
   document.getElementById('override-apply').onclick = () => {
     const pre = document.getElementById('ov-prematch').value;
     const inp = document.getElementById('ov-inplay').value;
-    const targets = isBulk ? bulkIds.map(id=>EVENTS.find(ev=>ev.id===id)) : [e];
-    targets.forEach(ev=>{
-      if (pre){ ev.preMatchProvider = pre; ev.override = {type:'pre-match', provider:pre, at:new Date().toISOString(), by:'m.tato'}; logAudit('Level 2 — Event Overrides','Override applied',`${ev.id}: Pre-Match → ${providerById(pre).name}`); }
-      if (inp){ ev.inPlayProvider = inp; ev.override = {type:'in-play', provider:inp, at:new Date().toISOString(), by:'m.tato'}; logAudit('Level 2 — Event Overrides','Override applied',`${ev.id}: In-Play → ${providerById(inp).name}`); }
+    bulkIds.map(id=>EVENTS.find(ev=>ev.id===id)).forEach(ev=>{
+      if (pre){ ev.overrides.prematch = {provider:pre, at:new Date().toISOString(), by:'m.tato'}; logAudit('Level 2 — Event Overrides','Override applied (bulk)',`${ev.id}: Pre-Match → ${providerById(pre).name}`); }
+      if (inp){ ev.overrides.inplay = {provider:inp, at:new Date().toISOString(), by:'m.tato'}; logAudit('Level 2 — Event Overrides','Override applied (bulk)',`${ev.id}: In-Play → ${providerById(inp).name}`); }
     });
     closeDrawer('drawer-override');
     renderEventsTable();
-    toast('success', isBulk ? 'Bulk override applied' : 'Override applied', isBulk?`${bulkIds.length} events updated.`:`${e.name} updated.`);
-    if (isBulk){ selectedEvents.clear(); document.getElementById('eo-bulk-bar').style.display='none'; }
+    toast('success', 'Bulk override applied', `${bulkIds.length} events updated.`);
+    selectedEvents.clear();
+    document.getElementById('eo-bulk-bar').style.display = 'none';
   };
   openDrawer('drawer-override');
 }
-document.getElementById('eo-bulk-override').addEventListener('click', ()=> openOverrideDrawer(null, Array.from(selectedEvents)));
+document.getElementById('eo-bulk-override').addEventListener('click', ()=> openBulkOverrideDrawer(Array.from(selectedEvents)));
+
+// Saved filter presets
+function renderPresets(){
+  document.getElementById('eo-presets-list').innerHTML = SAVED_PRESETS.map(p=>`
+    <span class="ai-suggestion-chip" onclick="applyPreset('${p.id}')">${p.name}</span>
+  `).join('') || '<span class="muted" style="font-size:12px;">No saved presets yet.</span>';
+}
+function applyPreset(id){
+  const p = SAVED_PRESETS.find(x=>x.id===id); if(!p) return;
+  document.getElementById('eo-filter-sport').value = p.filters.sport;
+  document.getElementById('eo-filter-sport').dispatchEvent(new Event('change'));
+  setTimeout(()=>{
+    document.getElementById('eo-filter-competition').value = p.filters.competition || '';
+    document.getElementById('eo-filter-status').value = p.filters.status;
+    document.getElementById('eo-filter-range').value = p.filters.range;
+    document.getElementById('eo-filter-override').value = p.filters.override;
+    renderEventsTable();
+  }, 0);
+  toast('default','Preset applied', p.name);
+}
+document.getElementById('eo-save-preset').addEventListener('click', ()=>{
+  const name = prompt('Name this filter preset:');
+  if (!name) return;
+  const filters = {
+    sport: document.getElementById('eo-filter-sport').value,
+    competition: document.getElementById('eo-filter-competition').value,
+    status: document.getElementById('eo-filter-status').value,
+    range: document.getElementById('eo-filter-range').value,
+    override: document.getElementById('eo-filter-override').value,
+  };
+  SAVED_PRESETS.push({ id:'p'+Date.now(), name, filters });
+  renderPresets();
+  toast('success','Preset saved', name);
+});
 
 /* ============================================================
-   LEVEL 3 — AUTOMATION & BLENDING
+   LEVEL 3 — AUTOMATED ACTIONS
    ============================================================ */
-function renderBlendingRules(){
-  document.getElementById('blending-rules-list').innerHTML = BLENDING_RULES.map(r=>`
-    <div class="card card-pad" style="margin-bottom:10px;">
-      <div class="flex-between">
-        <div class="flex-gap-2">
-          <strong style="font-size:13px;">${SPORTS.find(s=>s.id===r.sport)?.name} → ${r.competition}</strong>
-        </div>
-        <div>${providerChip(r.default, {suffix:'default'})}</div>
-      </div>
-      ${r.blend.length ? r.blend.map(b=>`
-        <div class="flex-gap-2" style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border-subtle);">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--fg-muted);"><path d="M8 3L4 7l4 4M4 7h16M16 21l4-4-4-4M20 17H4"/></svg>
-          ${providerChip(b.provider)}
-          <span class="badge badge-gray">${b.scope}</span>
-          <span class="muted" style="font-size:12px;">${b.reason}</span>
-        </div>`).join('') : `<div class="muted" style="font-size:12px;margin-top:6px;">No active blending — default provider covers 100% of assigned content.</div>`}
-    </div>
-  `).join('');
+function populateLogFilterProvider(){
+  const sel = document.getElementById('log-filter-provider');
+  PROVIDERS.forEach(p=> sel.innerHTML += `<option value="${p.id}">${p.name}</option>`);
 }
+function renderAutomationLog(){
+  const provider = document.getElementById('log-filter-provider').value;
+  const type = document.getElementById('log-filter-type').value;
+  const text = document.getElementById('log-filter-text').value.toLowerCase();
+  const typeMap = { outage:['badge-red','Outage triggered'], fallback:['badge-blue','Fallback activated'], recovered:['badge-green','Provider recovered'], degraded:['badge-yellow','Degraded'], 'gap-fill':['badge-blue','Gap coverage'] };
+  const rows = AUTOMATION_LOG.filter(a=>
+    (!provider || a.provider===provider) &&
+    (!type || a.type===type) &&
+    (!text || a.text.toLowerCase().includes(text) || a.competition.toLowerCase().includes(text) || sportName(a.sport).toLowerCase().includes(text))
+  ).sort((a,b)=>new Date(b.ts)-new Date(a.ts));
+  document.getElementById('automation-log-list').innerHTML = rows.map(a=>{
+    const [cls,label] = typeMap[a.type];
+    return `<div class="flex-gap-3" style="padding:10px 14px;border-bottom:1px solid var(--border-subtle);align-items:flex-start;">
+      <span class="badge ${cls}" style="flex:none;margin-top:2px;">${label}</span>
+      <div style="flex:1;">
+        <div style="font-size:12px;">${a.text}</div>
+        <div class="muted" style="font-size:11px;margin-top:2px;">${providerById(a.provider).name} · ${sportName(a.sport)} — ${a.competition} · ${fmtDate(a.ts)} · ${relTime(a.ts)}</div>
+      </div>
+    </div>`;
+  }).join('') || `<div class="empty-state">No automation events match these filters.</div>`;
+}
+document.getElementById('log-filter-provider').addEventListener('change', renderAutomationLog);
+document.getElementById('log-filter-type').addEventListener('change', renderAutomationLog);
+document.getElementById('log-filter-text').addEventListener('input', renderAutomationLog);
+document.getElementById('log-export').addEventListener('click', ()=>{
+  downloadCSV('automation_log.csv', ['Timestamp','Type','Provider','Sport','Competition','Description'],
+    AUTOMATION_LOG.map(a=>[a.ts, a.type, providerById(a.provider).name, sportName(a.sport), a.competition, a.text]));
+});
+
 function renderProviderHealth(){
   document.getElementById('provider-health-cards').innerHTML = PROVIDERS.map(p=>{
     const h = PROVIDER_HEALTH[p.id];
@@ -447,17 +572,6 @@ function renderProviderHealth(){
       <div class="flex-between"><strong style="font-size:13px;">${p.name}</strong>${healthBadge(h.status)}</div>
       <div class="kpi__value" style="font-size:20px;margin-top:10px;">${h.uptime30d}%</div>
       <div class="kpi__sub">uptime, last 30 days</div>
-    </div>`;
-  }).join('');
-  document.getElementById('alerts-timeline').innerHTML = ALERTS.slice().sort((a,b)=>new Date(b.ts)-new Date(a.ts)).map(a=>{
-    const typeMap = { outage:['badge-red','Outage triggered'], fallback:['badge-blue','Fallback activated'], recovered:['badge-green','Provider recovered'], degraded:['badge-yellow','Degraded'], 'gap-fill':['badge-blue','Gap coverage'] };
-    const [cls,label] = typeMap[a.type];
-    return `<div class="flex-gap-3" style="padding:10px 14px;border-bottom:1px solid var(--border-subtle);align-items:flex-start;">
-      <span class="badge ${cls}" style="flex:none;margin-top:2px;">${label}</span>
-      <div style="flex:1;">
-        <div style="font-size:12px;">${a.text}</div>
-        <div class="muted" style="font-size:11px;margin-top:2px;">${providerById(a.provider).name} · ${fmtDate(a.ts)} · ${relTime(a.ts)}</div>
-      </div>
     </div>`;
   }).join('');
 }
@@ -484,151 +598,267 @@ function renderCoverage(){
 }
 
 /* ============================================================
-   PROVIDER MAPPINGS (GTH)
+   PROVIDER MAPPINGS (GTH) — unified model
    ============================================================ */
-function gthFlatList(){
-  const list = [];
-  SPORTS.forEach(s=>{
-    list.push(s.name);
-    s.competitions.forEach(c=>{ list.push(`${s.name} → ${c.name}`); list.push(`${s.name} → ${c.name} → Pre-Match`); list.push(`${s.name} → ${c.name} → In-Play`); });
-  });
-  return list;
+function mappingDisplayRow(rec){
+  const g = rec.status === 'suggested' ? rec.suggestion : rec.gth;
+  return {
+    id: rec.id, level: rec.level, provider: rec.provider, providerName: providerById(rec.provider).name,
+    providerSport: rec.providerSport, providerCompetition: rec.providerCompetition, providerMarketType: rec.providerMarketType || '—',
+    gthSport: g && g.sportId ? sportName(g.sportId) : '—',
+    gthCompetition: g && g.competitionId ? competitionName(g.competitionId) : '—',
+    gthMarketType: g && g.marketType ? g.marketType : (rec.level==='marketType' ? '—' : ''),
+    confidence: rec.status==='suggested' ? rec.suggestion.confidence : null,
+    status: rec.status, rejectReason: rec.rejectReason || '', updated: rec.updated || '', by: rec.by || '',
+  };
 }
-function renderUnmapped(){
-  const wrap = document.getElementById('unmapped-list');
-  if (!UNMAPPED_ITEMS.length){ wrap.innerHTML = `<div class="empty-state">${ICONS.check.replace('<svg ','<svg style="width:32px;height:32px;" ')}<div>All provider hierarchy items are mapped.</div></div>`; return; }
-  wrap.innerHTML = UNMAPPED_ITEMS.map(u=>`
-    <div class="card card-pad" style="margin-bottom:10px;" data-unmapped="${u.id}">
-      <div class="flex-between">
-        <div>
-          <span class="badge badge-gray">${providerById(u.provider).name}</span>
-          <div style="margin-top:6px;font-size:13px;font-weight:600;">${u.path}</div>
-        </div>
-      </div>
-      ${u.suggestedGTH ? `
-      <div class="flex-gap-3" style="margin-top:12px;background:var(--bg-info);border:1px solid var(--border-info);border-radius:6px;padding:10px 12px;">
-        <div style="flex:1;">
-          <div style="font-size:11px;font-weight:600;color:var(--blue-fg);margin-bottom:3px;">AI SUGGESTION</div>
-          <div style="font-size:13px;">${u.suggestedGTH}</div>
-          <div class="flex-gap-2" style="margin-top:6px;">
-            <div class="confidence-bar"><div class="confidence-bar__fill" style="width:${u.confidence}%;background:${u.confidence>=85?'var(--green-solid)':'var(--yellow-solid)'};"></div></div>
-            <span style="font-size:11px;font-weight:600;">${u.confidence}% confidence</span>
-          </div>
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="acceptSuggestion('${u.id}')">Accept</button>
-      </div>` : `<div class="alert alert-warning" style="margin-top:12px;">${ICONS.alert}<div>No confident AI match found — search manually.</div></div>`}
-      <div class="flex-gap-2" style="margin-top:10px;">
-        <button class="btn btn-secondary btn-sm" onclick="openGthSearch('${u.id}')">Search GTH manually</button>
-        <button class="btn btn-tertiary btn-sm" onclick="openReject('${u.id}')">Reject (Do Not Map)</button>
-      </div>
-    </div>
-  `).join('');
+
+const tableState = {};
+function getTableState(key){ return tableState[key] || (tableState[key] = { sortCol:null, sortDir:'asc', provider:'', text:'' }); }
+function applyFilterSort(rows, state, textFields){
+  let out = rows;
+  if (state.provider) out = out.filter(r=>r.provider===state.provider);
+  if (state.text){ const q=state.text.toLowerCase(); out = out.filter(r=> textFields.some(f=>String(r[f]||'').toLowerCase().includes(q))); }
+  if (state.sortCol){
+    out = out.slice().sort((a,b)=>{
+      const av=a[state.sortCol]??'', bv=b[state.sortCol]??'';
+      if (av<bv) return state.sortDir==='asc'?-1:1;
+      if (av>bv) return state.sortDir==='asc'?1:-1;
+      return 0;
+    });
+  }
+  return out;
 }
+function renderFilterBar(containerId, stateKey, onchange, csvFn){
+  const state = getTableState(stateKey);
+  const el = document.getElementById(containerId);
+  el.innerHTML = `
+    <select class="select input-sm" style="width:160px;">
+      <option value="">All providers</option>
+      ${PROVIDERS.map(p=>`<option value="${p.id}" ${state.provider===p.id?'selected':''}>${p.name}</option>`).join('')}
+    </select>
+    <input class="input input-sm" style="width:260px;" placeholder="Search sport, competition, market type…" value="${(state.text||'').replace(/"/g,'&quot;')}">
+    <button class="btn btn-sm btn-tertiary" style="margin-left:auto;">Export CSV</button>
+  `;
+  const [sel, inp, btn] = el.children;
+  sel.onchange = () => { state.provider = sel.value; onchange(); };
+  inp.oninput = () => { state.text = inp.value; onchange(); };
+  btn.onclick = csvFn;
+}
+function renderMappingTable(tableId, columns, rawRows, stateKey, rerender, actionsRenderer){
+  const state = getTableState(stateKey);
+  const textFields = columns.filter(c=>!c.key.startsWith('__')).map(c=>c.key);
+  const rows = applyFilterSort(rawRows, state, textFields);
+  const table = document.getElementById(tableId);
+  const thead = table.querySelector('thead'), tbody = table.querySelector('tbody');
+  thead.innerHTML = '<tr>' + columns.map(c=>{
+    if (c.key.startsWith('__')) return '<th></th>';
+    const arrow = state.sortCol===c.key ? (state.sortDir==='asc'?' ▲':' ▼') : '';
+    return `<th class="sortable" data-col="${c.key}">${c.label}${arrow}</th>`;
+  }).join('') + '</tr>';
+  thead.onclick = (e) => {
+    const th = e.target.closest('[data-col]'); if(!th) return;
+    const col = th.dataset.col;
+    if (state.sortCol===col) state.sortDir = state.sortDir==='asc'?'desc':'asc'; else { state.sortCol=col; state.sortDir='asc'; }
+    rerender();
+  };
+  tbody.innerHTML = rows.map(r=>'<tr>' + columns.map(c=>{
+    if (c.key==='__connector') return `<td style="text-align:center;width:32px;color:var(--fg-muted);">${ICONS.arrowRight}</td>`;
+    if (c.key==='__actions') return `<td>${actionsRenderer(r)}</td>`;
+    if (c.key==='providerName') return `<td><span class="badge badge-gray">${r.providerName}</span></td>`;
+    if (c.key==='level') return `<td><span class="badge badge-gray">${r.level==='marketType'?'Market Type':'Competition'}</span></td>`;
+    if (c.key==='confidence') return r.confidence==null ? '<td>—</td>' : `<td><div class="flex-gap-2"><div class="confidence-bar" style="width:60px;"><div class="confidence-bar__fill" style="width:${r.confidence}%;background:${r.confidence>=85?'var(--green-solid)':'var(--yellow-solid)'};"></div></div><span style="font-size:11px;font-weight:600;">${r.confidence}%</span></div></td>`;
+    if (c.key==='status') return `<td>${r.status==='rejected'?`<span class="badge badge-yellow">Rejected — ${r.rejectReason}</span>`:'<span class="badge badge-red">Unmapped</span>'}</td>`;
+    return `<td>${r[c.key] || '—'}</td>`;
+  }).join('') + '</tr>').join('') || `<tr><td colspan="${columns.length}"><div class="empty-state">Nothing here.</div></td></tr>`;
+}
+function exportMappingCSV(rows, filename){
+  downloadCSV(filename,
+    ['Provider','Level','Provider Sport','Provider Competition','Provider Market Type','GTH Sport','GTH Competition','GTH Market Type','Confidence','Status','Reject Reason','Updated','By'],
+    rows.map(r=>[r.providerName, r.level, r.providerSport, r.providerCompetition, r.providerMarketType, r.gthSport, r.gthCompetition, r.gthMarketType, r.confidence??'', r.status, r.rejectReason, r.updated, r.by]));
+}
+
+const COLS_SUGGESTED = [
+  {key:'providerName', label:'Provider'}, {key:'level', label:'Level'},
+  {key:'providerSport', label:'Provider Sport'}, {key:'providerCompetition', label:'Provider Competition'}, {key:'providerMarketType', label:'Provider Market Type'},
+  {key:'__connector', label:''},
+  {key:'gthSport', label:'Suggested GTH Sport'}, {key:'gthCompetition', label:'Suggested GTH Competition'}, {key:'gthMarketType', label:'Suggested Market Type'},
+  {key:'confidence', label:'Confidence'}, {key:'__actions', label:''},
+];
+const COLS_ACTIVE_COMP = [
+  {key:'providerName', label:'Provider'}, {key:'providerSport', label:'Provider Sport'}, {key:'providerCompetition', label:'Provider Competition'},
+  {key:'__connector', label:''},
+  {key:'gthSport', label:'GTH Sport'}, {key:'gthCompetition', label:'GTH Competition'},
+  {key:'updated', label:'Last Updated'}, {key:'__actions', label:''},
+];
+const COLS_ACTIVE_MT = [
+  {key:'providerName', label:'Provider'}, {key:'providerSport', label:'Provider Sport'}, {key:'providerCompetition', label:'Provider Competition'}, {key:'providerMarketType', label:'Provider Market Type'},
+  {key:'__connector', label:''},
+  {key:'gthSport', label:'GTH Sport'}, {key:'gthCompetition', label:'GTH Competition'}, {key:'gthMarketType', label:'GTH Market Type'},
+  {key:'updated', label:'Last Updated'}, {key:'__actions', label:''},
+];
+const COLS_UNMAPPED_COMP = [
+  {key:'providerName', label:'Provider'}, {key:'providerSport', label:'Provider Sport'}, {key:'providerCompetition', label:'Provider Competition'},
+  {key:'status', label:'Status'}, {key:'__actions', label:''},
+];
+const COLS_UNMAPPED_MT = [
+  {key:'providerName', label:'Provider'}, {key:'providerSport', label:'Provider Sport'}, {key:'providerCompetition', label:'Provider Competition'}, {key:'providerMarketType', label:'Provider Market Type'},
+  {key:'status', label:'Status'}, {key:'__actions', label:''},
+];
+
+function renderSuggestedTab(){
+  const rows = GTH_MAPPINGS.filter(m=>m.status==='suggested').map(mappingDisplayRow);
+  renderFilterBar('filterbar-suggested', 'suggested', renderSuggestedTab, ()=>exportMappingCSV(rows,'suggested_maps.csv'));
+  renderMappingTable('table-suggested', COLS_SUGGESTED, rows, 'suggested', renderSuggestedTab, (r)=>`
+    <div class="flex-gap-1">
+      <button class="btn btn-sm btn-primary" onclick="acceptSuggestion('${r.id}')">Accept</button>
+      <button class="btn btn-sm btn-secondary" onclick="openGthSearch('${r.id}')">Change</button>
+      <button class="btn btn-sm btn-tertiary" onclick="openReject('${r.id}')">Reject</button>
+    </div>`);
+}
+function renderActiveCompTab(){
+  const rows = GTH_MAPPINGS.filter(m=>m.status==='active' && m.level==='competition').map(mappingDisplayRow);
+  renderFilterBar('filterbar-active-competitions', 'active-competitions', renderActiveCompTab, ()=>exportMappingCSV(rows,'active_mappings_competitions.csv'));
+  renderMappingTable('table-active-competitions', COLS_ACTIVE_COMP, rows, 'active-competitions', renderActiveCompTab, (r)=>`
+    <div class="flex-gap-1">
+      <span class="icon-btn" style="width:24px;height:24px;" title="Edit" onclick="openGthSearch('${r.id}')">${ICONS.edit}</span>
+      <span class="icon-btn" style="width:24px;height:24px;" title="History" onclick="showHistory('${r.id}')">${ICONS.history}</span>
+      <span class="icon-btn" style="width:24px;height:24px;" title="Delete" onclick="deleteMapping('${r.id}')">${ICONS.trash}</span>
+    </div>`);
+}
+function renderActiveMtTab(){
+  const rows = GTH_MAPPINGS.filter(m=>m.status==='active' && m.level==='marketType').map(mappingDisplayRow);
+  renderFilterBar('filterbar-active-markettypes', 'active-markettypes', renderActiveMtTab, ()=>exportMappingCSV(rows,'active_mappings_market_types.csv'));
+  renderMappingTable('table-active-markettypes', COLS_ACTIVE_MT, rows, 'active-markettypes', renderActiveMtTab, (r)=>`
+    <div class="flex-gap-1">
+      <span class="icon-btn" style="width:24px;height:24px;" title="Edit" onclick="openGthSearch('${r.id}')">${ICONS.edit}</span>
+      <span class="icon-btn" style="width:24px;height:24px;" title="History" onclick="showHistory('${r.id}')">${ICONS.history}</span>
+      <span class="icon-btn" style="width:24px;height:24px;" title="Delete" onclick="deleteMapping('${r.id}')">${ICONS.trash}</span>
+    </div>`);
+}
+function renderUnmappedCompTab(){
+  const rows = GTH_MAPPINGS.filter(m=>(m.status==='unmapped'||m.status==='rejected') && m.level==='competition').map(mappingDisplayRow);
+  renderFilterBar('filterbar-unmapped-competitions', 'unmapped-competitions', renderUnmappedCompTab, ()=>exportMappingCSV(rows,'unmapped_competitions.csv'));
+  renderMappingTable('table-unmapped-competitions', COLS_UNMAPPED_COMP, rows, 'unmapped-competitions', renderUnmappedCompTab, (r)=>`
+    <div class="flex-gap-1">
+      <button class="btn btn-sm btn-secondary" onclick="openGthSearch('${r.id}')">Map</button>
+      ${r.status==='unmapped' ? `<button class="btn btn-sm btn-tertiary" onclick="openReject('${r.id}')">Reject</button>` : ''}
+    </div>`);
+}
+function renderUnmappedMtTab(){
+  const rows = GTH_MAPPINGS.filter(m=>(m.status==='unmapped'||m.status==='rejected') && m.level==='marketType').map(mappingDisplayRow);
+  renderFilterBar('filterbar-unmapped-markettypes', 'unmapped-markettypes', renderUnmappedMtTab, ()=>exportMappingCSV(rows,'unmapped_market_types.csv'));
+  renderMappingTable('table-unmapped-markettypes', COLS_UNMAPPED_MT, rows, 'unmapped-markettypes', renderUnmappedMtTab, (r)=>`
+    <div class="flex-gap-1">
+      <button class="btn btn-sm btn-secondary" onclick="openGthSearch('${r.id}')">Map</button>
+      ${r.status==='unmapped' ? `<button class="btn btn-sm btn-tertiary" onclick="openReject('${r.id}')">Reject</button>` : ''}
+    </div>`);
+}
+function refreshMappingCounts(){
+  const suggestedCount = GTH_MAPPINGS.filter(m=>m.status==='suggested').length;
+  const unmappedTabCount = GTH_MAPPINGS.filter(m=>m.status==='unmapped'||m.status==='rejected').length;
+  const needsAttention = GTH_MAPPINGS.filter(m=>m.status==='suggested'||m.status==='unmapped').length;
+  document.getElementById('unmapped-count').textContent = needsAttention;
+  document.getElementById('mapping-nav-badge').textContent = needsAttention;
+  document.getElementById('suggested-tab-badge').textContent = suggestedCount;
+  document.getElementById('unmapped-tab-badge').textContent = unmappedTabCount;
+  document.getElementById('notif-btn').querySelector('.badge-count').style.display = needsAttention===0 ? 'none' : 'flex';
+}
+function refreshAllMappingTabs(){
+  renderSuggestedTab(); renderActiveCompTab(); renderActiveMtTab(); renderUnmappedCompTab(); renderUnmappedMtTab();
+  refreshMappingCounts();
+}
+
 function acceptSuggestion(id){
-  const idx = UNMAPPED_ITEMS.findIndex(u=>u.id===id);
-  const u = UNMAPPED_ITEMS[idx];
-  ACTIVE_MAPPINGS.unshift({ provider:u.provider, providerPath:u.path, gthPath:u.suggestedGTH, updated:new Date().toISOString().slice(0,10), by:'m.tato' });
-  UNMAPPED_ITEMS.splice(idx,1);
-  markMapped(u);
-  logAudit('Provider Mappings','Mapping confirmed',`${u.path} mapped to ${u.suggestedGTH} (AI suggested, accepted)`);
-  renderUnmapped(); renderActiveMappings(); refreshMappingCounts(); renderHierarchyTree(); renderEventsTable();
-  toast('success','Mapping confirmed', `${u.path} → ${u.suggestedGTH}`);
+  const rec = GTH_MAPPINGS.find(m=>m.id===id); if(!rec) return;
+  rec.gth = { ...rec.suggestion };
+  rec.status = 'active'; rec.updated = new Date().toISOString().slice(0,10); rec.by = 'm.tato';
+  markMapped(rec.provider, rec.gth.competitionId, rec.gth.marketType);
+  logAudit('Provider Mappings','Mapping confirmed',`${rec.providerSport} → ${rec.providerCompetition}${rec.providerMarketType?' → '+rec.providerMarketType:''} (${providerById(rec.provider).name}) mapped to GTH (AI suggested, accepted)`);
+  refreshAllMappingTabs(); renderHierarchyTree(); renderEventsTable();
+  toast('success','Mapping confirmed', `${rec.providerCompetition} → ${sportName(rec.gth.sportId)} / ${competitionName(rec.gth.competitionId)}`);
 }
 let rejectTargetId = null;
-function openReject(id){ rejectTargetId = id; document.getElementById('reject-other-field').style.display='none'; document.getElementById('reject-reason').value='Deprecated'; openOverlay('overlay-reject'); }
+function openReject(id){ rejectTargetId = id; document.getElementById('reject-other-field').style.display='none'; document.getElementById('reject-reason').value='Deprecated'; document.getElementById('reject-other-text').value=''; openOverlay('overlay-reject'); }
 document.getElementById('reject-reason').addEventListener('change', function(){ document.getElementById('reject-other-field').style.display = this.value==='Other'?'block':'none'; });
 document.getElementById('reject-confirm').addEventListener('click', ()=>{
-  const idx = UNMAPPED_ITEMS.findIndex(u=>u.id===rejectTargetId);
-  if (idx<0) return closeOverlay('overlay-reject');
-  const u = UNMAPPED_ITEMS[idx];
-  const reason = document.getElementById('reject-reason').value;
-  REJECTED_MAPPINGS.unshift({ provider:u.provider, providerPath:u.path, reason, by:'m.tato', at:new Date().toISOString().slice(0,10) });
-  UNMAPPED_ITEMS.splice(idx,1);
-  logAudit('Provider Mappings','Mapping rejected',`${u.path} marked Do Not Map (${reason})`);
+  const rec = GTH_MAPPINGS.find(m=>m.id===rejectTargetId);
+  if (!rec) return closeOverlay('overlay-reject');
+  const selected = document.getElementById('reject-reason').value;
+  const otherText = document.getElementById('reject-other-text').value.trim();
+  const reason = selected === 'Other' && otherText ? otherText : selected;
+  rec.status = 'rejected'; rec.rejectReason = reason; rec.by = 'm.tato'; rec.updated = new Date().toISOString().slice(0,10);
+  logAudit('Provider Mappings','Mapping rejected',`${rec.providerCompetition} (${providerById(rec.provider).name}) marked Do Not Map (${reason})`);
   closeOverlay('overlay-reject');
-  renderUnmapped(); renderRejectedMappings(); refreshMappingCounts();
-  toast('default','Marked as Do Not Map', u.path);
+  refreshAllMappingTabs();
+  toast('default','Marked as Do Not Map', rec.providerCompetition);
 });
 let gthSearchTargetId = null;
+let gthSearchResultsCache = [];
+function gthOptionsList(level){
+  const list = [];
+  SPORTS.forEach(s=> s.competitions.forEach(c=>{
+    if (level==='competition') list.push({ sportId:s.id, competitionId:c.id, marketType:null, label:`${s.name} → ${c.name}` });
+    else {
+      list.push({ sportId:s.id, competitionId:c.id, marketType:'Pre-Match', label:`${s.name} → ${c.name} → Pre-Match` });
+      list.push({ sportId:s.id, competitionId:c.id, marketType:'In-Play', label:`${s.name} → ${c.name} → In-Play` });
+    }
+  }));
+  return list;
+}
 function openGthSearch(id){
   gthSearchTargetId = id;
-  const u = UNMAPPED_ITEMS.find(x=>x.id===id) || {path:'this item'};
-  document.getElementById('search-gth-subtitle').textContent = `Mapping: ${u.path}`;
+  const rec = GTH_MAPPINGS.find(m=>m.id===id);
+  document.getElementById('search-gth-subtitle').textContent = `Mapping: ${rec.providerSport} → ${rec.providerCompetition}${rec.providerMarketType?' → '+rec.providerMarketType:''} (${providerById(rec.provider).name})`;
   document.getElementById('gth-search-input').value='';
-  renderGthResults('');
+  renderGthResults('', rec.level);
   openOverlay('overlay-search-gth');
 }
-function renderGthResults(query){
-  const results = gthFlatList().filter(g=>g.toLowerCase().includes(query.toLowerCase())).slice(0,8);
-  document.getElementById('gth-search-results').innerHTML = results.map(r=>`
+function renderGthResults(query, level){
+  gthSearchResultsCache = gthOptionsList(level).filter(g=>g.label.toLowerCase().includes(query.toLowerCase())).slice(0,8);
+  document.getElementById('gth-search-results').innerHTML = gthSearchResultsCache.map((r,i)=>`
     <div class="flex-between" style="padding:8px 4px;border-bottom:1px solid var(--border-subtle);font-size:13px;">
-      <span>${r}</span>
-      <button class="btn btn-sm btn-secondary" onclick="confirmGthMatch('${r.replace(/'/g,"\\'")}')">Select</button>
+      <span>${r.label}</span>
+      <button class="btn btn-sm btn-secondary" onclick="confirmGthMatch(${i})">Select</button>
     </div>`).join('') || `<div class="muted" style="font-size:12px;padding:8px 4px;">No matches.</div>`;
 }
-document.getElementById('gth-search-input').addEventListener('input', function(){ renderGthResults(this.value); });
-function confirmGthMatch(gthPath){
-  const idx = UNMAPPED_ITEMS.findIndex(u=>u.id===gthSearchTargetId);
-  if (idx>=0){
-    const u = UNMAPPED_ITEMS[idx];
-    ACTIVE_MAPPINGS.unshift({ provider:u.provider, providerPath:u.path, gthPath, updated:new Date().toISOString().slice(0,10), by:'m.tato' });
-    UNMAPPED_ITEMS.splice(idx,1);
-    markMapped(u);
-    logAudit('Provider Mappings','Mapping confirmed',`${u.path} manually mapped to ${gthPath}`);
-    renderUnmapped(); refreshMappingCounts(); renderHierarchyTree(); renderEventsTable();
-    toast('success','Mapping confirmed', `${u.path} → ${gthPath}`);
-  } else {
-    toast('success','Mapping updated', `Re-mapped to ${gthPath}`);
-  }
-  renderActiveMappings();
+document.getElementById('gth-search-input').addEventListener('input', function(){
+  const rec = GTH_MAPPINGS.find(m=>m.id===gthSearchTargetId);
+  renderGthResults(this.value, rec ? rec.level : 'competition');
+});
+function confirmGthMatch(idx){
+  const choice = gthSearchResultsCache[idx];
+  const rec = GTH_MAPPINGS.find(m=>m.id===gthSearchTargetId);
+  if (!rec) return closeOverlay('overlay-search-gth');
+  rec.gth = { sportId:choice.sportId, competitionId:choice.competitionId, marketType:choice.marketType };
+  rec.status = 'active'; rec.updated = new Date().toISOString().slice(0,10); rec.by = 'm.tato';
+  markMapped(rec.provider, rec.gth.competitionId, rec.gth.marketType);
+  logAudit('Provider Mappings','Mapping confirmed',`${rec.providerCompetition} (${providerById(rec.provider).name}) manually mapped to ${choice.label}`);
+  refreshAllMappingTabs(); renderHierarchyTree(); renderEventsTable();
   closeOverlay('overlay-search-gth');
+  toast('success','Mapping confirmed', `${rec.providerCompetition} → ${choice.label}`);
 }
 document.getElementById('gth-create-new').addEventListener('click', ()=>{
   closeOverlay('overlay-search-gth');
   toast('default','Opening GTH', 'Would open the GTH hierarchy editor in a new tab (mocked) so you can create the missing entry, then return here to map it.');
 });
-function renderActiveMappings(){
-  document.getElementById('active-mappings-tbody').innerHTML = ACTIVE_MAPPINGS.map((m,i)=>`
-    <tr>
-      <td><span class="badge badge-gray">${providerById(m.provider).name}</span></td>
-      <td>${m.providerPath}</td>
-      <td>${m.gthPath}</td>
-      <td>${m.updated} <span class="muted">· ${m.by}</span></td>
-      <td>
-        <div class="flex-gap-1">
-          <span class="icon-btn" style="width:24px;height:24px;" title="Edit" onclick="openGthSearch(null); gthSearchTargetId=null; document.getElementById('search-gth-subtitle').textContent='Re-mapping: ${m.providerPath.replace(/'/g,"\\'")}'; window.__editIdx=${i};">${ICONS.edit}</span>
-          <span class="icon-btn" style="width:24px;height:24px;" title="History" onclick="showHistory('${m.providerPath.replace(/'/g,"\\'")}')">${ICONS.history}</span>
-          <span class="icon-btn" style="width:24px;height:24px;" title="Delete" onclick="deleteMapping(${i})">${ICONS.trash}</span>
-        </div>
-      </td>
-    </tr>`).join('') || `<tr><td colspan="5"><div class="empty-state">No active mappings yet.</div></td></tr>`;
+function showHistory(id){
+  const rec = GTH_MAPPINGS.find(m=>m.id===id);
+  toast('default','Mapping history', `${rec.providerCompetition} — 1 change on record. Full audit trail lives in the Audit Log screen.`);
 }
-function showHistory(path){ toast('default','Mapping history', `${path} — 1 change on record (initial mapping). Full audit trail lives in the Audit Log screen.`); }
-function deleteMapping(i){
-  const m = ACTIVE_MAPPINGS[i];
+function deleteMapping(id){
+  const rec = GTH_MAPPINGS.find(m=>m.id===id); if(!rec) return;
   document.getElementById('confirm-title').textContent = 'Unmap this item?';
-  document.getElementById('confirm-subtitle').textContent = 'It will return to Unmapped and can no longer be used in defaults or blending until re-mapped.';
-  document.getElementById('confirm-body').innerHTML = `<div class="alert alert-error">${ICONS.alert}<div><strong>${m.providerPath}</strong>currently mapped to ${m.gthPath}</div></div>`;
+  document.getElementById('confirm-subtitle').textContent = 'It will move to Unmapped and can no longer be used in defaults or blending until re-mapped.';
+  document.getElementById('confirm-body').innerHTML = `<div class="alert alert-error">${ICONS.alert}<div><strong>${rec.providerCompetition}</strong> (${providerById(rec.provider).name}) currently mapped to ${sportName(rec.gth.sportId)} / ${competitionName(rec.gth.competitionId)}${rec.gth.marketType?' / '+rec.gth.marketType:''}</div></div>`;
   document.getElementById('confirm-ok').onclick = () => {
-    ACTIVE_MAPPINGS.splice(i,1);
-    UNMAPPED_ITEMS.push({ id:'u'+Date.now(), provider:m.provider, path:m.providerPath, suggestedGTH:m.gthPath, confidence:97 });
-    logAudit('Provider Mappings','Mapping deleted',`${m.providerPath} unmapped (was ${m.gthPath})`);
-    renderActiveMappings(); renderUnmapped(); refreshMappingCounts();
+    rec.status = 'unmapped'; delete rec.gth;
+    logAudit('Provider Mappings','Mapping deleted',`${rec.providerCompetition} (${providerById(rec.provider).name}) unmapped`);
+    refreshAllMappingTabs();
     closeOverlay('overlay-confirm');
-    toast('danger','Mapping removed', m.providerPath);
+    toast('danger','Mapping removed', rec.providerCompetition);
   };
   openOverlay('overlay-confirm');
-}
-function renderRejectedMappings(){
-  document.getElementById('rejected-mappings-tbody').innerHTML = REJECTED_MAPPINGS.map(r=>`
-    <tr>
-      <td><span class="badge badge-gray">${providerById(r.provider).name}</span></td>
-      <td>${r.providerPath}</td>
-      <td><span class="badge badge-yellow">${r.reason}</span></td>
-      <td>${r.by}</td>
-      <td>${r.at}</td>
-      <td></td>
-    </tr>`).join('') || `<tr><td colspan="6"><div class="empty-state">Nothing rejected.</div></td></tr>`;
 }
 
 /* ============================================================
@@ -676,7 +906,7 @@ function renderAnTable(){
     </tr>`;
   }).join('');
 }
-function svgLineChart(el, series, opts={}){
+function svgLineChart(el, series){
   const w=560,h=180,pad=8;
   const allVals = Object.values(series).flat();
   const max = Math.max(...allVals)*1.1, min=0;
@@ -732,7 +962,10 @@ document.getElementById('an-compare').addEventListener('click', function(){
     }).join('');
   } else renderKpiRow();
 });
-document.getElementById('an-export').addEventListener('click', ()=> toast('default','Export started', 'Generating CSV for the selected range and providers (mocked).'));
+document.getElementById('an-export').addEventListener('click', ()=>{
+  downloadCSV('provider_analytics.csv', ['Provider','Revenue','Bets','Coverage %','Uptime %','Latency (ms)','Margin %'],
+    Array.from(activeProviderFilter).map(id=>{ const p=providerById(id), a=ANALYTICS_SUMMARY[id]; return [p.name,a.revenue,a.bets,a.coveragePct,a.uptimePct,a.latencyMs,a.marginPct]; }));
+});
 
 /* ============================================================
    AUDIT LOG
@@ -752,7 +985,9 @@ function renderAuditLog(){
 }
 document.getElementById('al-filter-area').addEventListener('change', renderAuditLog);
 document.getElementById('al-filter-user').addEventListener('input', renderAuditLog);
-document.getElementById('al-export').addEventListener('click', ()=> toast('default','Export started','Generating CSV of the audit log (mocked).'));
+document.getElementById('al-export').addEventListener('click', ()=>{
+  downloadCSV('audit_log.csv', ['Timestamp','User','Area','Action','Detail'], AUDIT_LOG.map(a=>[a.ts,a.user,a.area,a.action,a.detail]));
+});
 
 /* ============================================================
    AI ASSISTANT (rule-based demo NLU)
@@ -832,16 +1067,16 @@ function handleAiInput(raw){
   if (m){
     const evt = EVENTS.find(e=>e.id.toLowerCase()===m[1].toLowerCase());
     const provider = findProviderByName(m[2].trim());
-    const mt = m[3].includes('pre') ? 'pre-match' : 'in-play';
+    const mt = m[3].includes('pre') ? 'prematch' : 'inplay';
+    const mtLabel = mt==='prematch' ? 'Pre-Match' : 'In-Play';
     if (!evt){ aiSay(`I can't find event "${m[1]}". Double-check the event ID (e.g. EVT-30070).`); return; }
     if (!provider){ aiSay(`I don't recognise that provider.`); return; }
-    aiConfirmCard(`Confirm: override ${evt.id} — ${mt==='pre-match'?'Pre-Match':'In-Play'} → ${provider.name}`, [
-      evt.name, `${mt==='pre-match'?'Pre-Match':'In-Play'} provider → ${provider.name}`,
-      isMapped(provider.id, evt.competition, mt.replace('-','')) ? 'GTH mapping: OK' : '⚠ Not mapped for this competition — will be flagged as a conflict but still applied.'
+    aiConfirmCard(`Confirm: override ${evt.id} — ${mtLabel} → ${provider.name}`, [
+      evt.name, `${mtLabel} provider → ${provider.name}`,
+      isMapped(provider.id, evt.competition, mt) ? 'GTH mapping: OK' : '⚠ Not mapped for this competition — will be flagged as a conflict but still applied.'
     ], ()=>{
-      if (mt==='pre-match'){ evt.preMatchProvider = provider.id; evt.override = {type:'pre-match', provider:provider.id, at:new Date().toISOString(), by:'m.tato'}; }
-      else { evt.inPlayProvider = provider.id; evt.override = {type:'in-play', provider:provider.id, at:new Date().toISOString(), by:'m.tato'}; }
-      logAudit('Level 2 — Event Overrides','Override applied (via AI Assistant)',`${evt.id}: ${mt} → ${provider.name}`);
+      evt.overrides[mt] = { provider: provider.id, at:new Date().toISOString(), by:'m.tato' };
+      logAudit('Level 2 — Event Overrides','Override applied (via AI Assistant)',`${evt.id}: ${mtLabel} → ${provider.name}`);
       renderEventsTable();
       aiSay(`Applied. <a onclick="document.querySelector('.nav-item[data-view=event-overrides]').click(); document.getElementById('ai-panel').classList.remove('open');" style="color:var(--blue-fg);cursor:pointer;text-decoration:underline;">Open Event Overrides</a> to see it.`);
     });
@@ -859,8 +1094,10 @@ function handleAiInput(raw){
   if (lower.includes('unmapped') && lower.includes('for')){
     m = lower.match(/for (.+?)\??$/);
     const provider = m ? findProviderByName(m[1].trim()) : null;
-    const items = provider ? UNMAPPED_ITEMS.filter(u=>u.provider===provider.id) : UNMAPPED_ITEMS;
-    aiSay(items.length ? `${items.length} unmapped item(s)${provider?` for ${provider.name}`:''}:<ul>${items.map(i=>`<li>${i.path}</li>`).join('')}</ul>` : `No unmapped items${provider?` for ${provider.name}`:''} 🎉`);
+    const items = GTH_MAPPINGS.filter(x=> (x.status==='suggested'||x.status==='unmapped') && (!provider || x.provider===provider.id));
+    aiSay(items.length
+      ? `${items.length} unmapped item(s)${provider?` for ${provider.name}`:''}:<ul>${items.map(i=>`<li>${i.providerSport} → ${i.providerCompetition}${i.providerMarketType?' → '+i.providerMarketType:''}</li>`).join('')}</ul>`
+      : `No unmapped items${provider?` for ${provider.name}`:''} 🎉`);
     return;
   }
   m = lower.match(/uptime.*for (.+?)( last month)?\??$/);
@@ -889,16 +1126,16 @@ document.getElementById('ai-suggestions').innerHTML = AI_SUGGESTIONS.map(s=>`<sp
    ============================================================ */
 function init(){
   aiSay(`Hi — I can configure providers or answer questions in plain language. Try: "Set BetRadar as default for Tennis" (Journey 6 from the PRD) or one of the suggestions below.`);
+  updateHeaderSearchForView('blending-config');
   populateEventFilters();
+  renderPresets();
   renderHierarchyTree();
   renderEventsTable();
-  renderBlendingRules();
+  populateLogFilterProvider();
+  renderAutomationLog();
   renderProviderHealth();
   renderCoverage();
-  renderUnmapped();
-  renderActiveMappings();
-  renderRejectedMappings();
-  refreshMappingCounts();
+  refreshAllMappingTabs();
   renderProviderFilterChips();
   renderAnalytics();
   renderAuditLog();
