@@ -326,6 +326,52 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
 .matchtype-dot.prematch{background:var(--blue-solid);}
 .matchtype-dot.inplay{background:var(--red-solid);}
 
+.tree-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;flex:none;}
+
+/* Rich hover tooltip for "not mapped to GTH" warnings, with a fix-it link */
+.map-warning{position:relative;display:inline-flex;align-items:center;cursor:help;flex:none;}
+.map-warning__icon{width:14px;height:14px;color:var(--fg-error);flex:none;}
+.map-tooltip{
+  position:absolute;top:calc(100% + 8px);right:-8px;
+  background:var(--gray-solid);color:var(--text-fg-inverted);
+  border-radius:var(--radii-md);padding:var(--sp-3);width:250px;
+  font-size:11px;line-height:1.5;box-shadow:var(--shadow-float);
+  display:none;z-index:60;text-align:left;
+}
+.map-warning:hover .map-tooltip{display:block;}
+.map-tooltip strong{display:block;color:var(--text-fg-inverted);margin-bottom:4px;font-size:12px;}
+.map-tooltip p{margin:0;}
+.map-tooltip b{color:var(--text-fg-inverted);}
+.map-tooltip a{color:#8ecaff;text-decoration:underline;cursor:pointer;display:inline-block;margin-top:8px;font-weight:var(--fw-semibold);}
+.map-tooltip::after{content:'';position:absolute;bottom:100%;right:12px;border:5px solid transparent;border-bottom-color:var(--gray-solid);}
+
+/* Provider-mapping tables: visually split Feed (provider) vs GTH (internal) columns */
+.group-header-cell{
+  text-align:center;font-size:10px;font-weight:var(--fw-bold);letter-spacing:.5px;
+  color:var(--fg-muted);background:var(--bg-subtle);border-bottom:1px solid var(--border);
+  padding:4px var(--sp-2);text-transform:uppercase;
+}
+.data-table td.col-gth, .data-table th.col-gth{background:var(--blue-subtle);}
+.data-table th.group-header-cell.col-gth{background:var(--blue-100,var(--blue-subtle));color:var(--blue-fg);}
+.filter-row th{padding:4px 6px;background:var(--gray-contrast);}
+.filter-row .input, .filter-row .select{height:24px;font-size:11px;}
+
+/* Suggested Maps — compact review cards (feed info | GTH suggestion | actions) */
+.suggestion-card{
+  display:flex;align-items:center;gap:var(--sp-3);background:var(--gray-contrast);
+  border:1px solid var(--border);border-radius:var(--radii-md);padding:var(--sp-3);margin-bottom:var(--sp-2);
+  flex-wrap:wrap;
+}
+.suggestion-card__feed{flex:1;min-width:200px;}
+.suggestion-card__arrow{color:var(--fg-muted);flex:none;}
+.suggestion-card__gth{
+  flex:1;min-width:200px;background:var(--bg-info);border:1px solid var(--border-info);
+  border-radius:var(--radii-sm);padding:var(--sp-2) var(--sp-3);
+}
+.suggestion-card__label{font-size:10px;font-weight:var(--fw-bold);color:var(--blue-fg);letter-spacing:.4px;margin-bottom:2px;}
+.suggestion-card__path{font-size:13px;font-weight:var(--fw-semibold);color:var(--fg-title);}
+.suggestion-card__actions{display:flex;gap:6px;flex:none;}
+
 .tree{font-size:var(--fs-xs);}
 .tree-row{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-1_5) var(--sp-2);border-radius:var(--radii-md);cursor:pointer;}
 .tree-row:hover{background:var(--bg-muted);}

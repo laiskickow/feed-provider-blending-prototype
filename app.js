@@ -81,6 +81,65 @@ function downloadCSV(filename, headers, rows){
   document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
+// Builds "Sport → Competition → Market Type" style breadcrumbs, skipping
+// whichever segments don't apply (e.g. market-type mappings have no
+// competition since that mapping is sport-wide, not per-competition).
+function providerPathLabel(rec){
+  return [rec.providerSport, rec.providerCompetition, rec.providerMarketType].filter(Boolean).join(' → ');
+}
+function gthPathLabel(g){
+  if (!g) return '—';
+  return [sportName(g.sportId), g.competitionId ? competitionName(g.competitionId) : null, g.marketType].filter(Boolean).join(' → ');
+}
+
+/* ============================================================
+   SHARED: "not mapped to GTH" warning — rich tooltip + fix-it link
+   ============================================================ */
+function mapWarningHtml(providerId, sportId, competitionId, matchType){
+  const provider = providerById(providerId);
+  const providerLabel = provider ? provider.name : 'This provider';
+  const compName = competitionId ? competitionName(competitionId) : null;
+  const mtLabel = matchType ? (matchType === 'prematch' ? 'Pre-Match' : 'In-Play') : null;
+  const scopeLabel = [compName, mtLabel].filter(Boolean).join(' — ') || sportName(sportId);
+  const mtArg = matchType ? `'${matchType}'` : 'null';
+  const compArg = competitionId ? `'${competitionId}'` : 'null';
+  return `<span class="map-warning">
+    ${ICONS.alert.replace('<svg ', '<svg class="map-warning__icon" ')}
+    <div class="map-tooltip">
+      <strong>Not mapped to GTH</strong>
+      <p>${providerLabel} isn't mapped to <b>${scopeLabel}</b> in the internal hierarchy — it can't be used here until that's resolved.</p>
+      <a onclick="event.stopPropagation(); goToMappingFor('${providerId}','${sportId}',${compArg},${mtArg})">Fix this mapping →</a>
+    </div>
+  </span>`;
+}
+// Jumps to Provider Mappings, lands on the right tab/sub-tab, and filters
+// straight to the record that explains (and fixes) a given warning.
+function goToMappingFor(providerId, sportId, competitionId, matchType){
+  const marketType = matchType ? (matchType === 'prematch' ? 'Pre-Match' : 'In-Play') : null;
+  const rec = GTH_MAPPINGS.find(m=>{
+    if (m.provider !== providerId || m.status !== 'suggested') return false;
+    if (marketType) return m.level === 'marketType' && m.suggestion.sportId === sportId && m.suggestion.marketType === marketType;
+    return m.level === 'competition' && m.suggestion.competitionId === competitionId;
+  });
+  document.querySelector('.nav-item[data-view="mappings"]').click();
+  if (rec){
+    document.querySelector('.tab[data-tab="suggested"]').click();
+    const state = getTableState('suggested');
+    state.text = competitionId ? competitionName(competitionId) : sportName(sportId);
+    state.provider = providerId;
+    renderSuggestedTab();
+  } else {
+    document.querySelector('.tab[data-tab="unmapped"]').click();
+    const subKey = marketType ? 'unmapped-markettypes' : 'unmapped-competitions';
+    document.querySelector(`.tab[data-tab="${subKey}"]`).click();
+    const state = getTableState(subKey);
+    state.colFilters = state.colFilters || {};
+    state.colFilters.providerSport = sportName(sportId);
+    state.colFilters.providerCompetition = competitionId ? competitionName(competitionId) : '';
+    (marketType ? renderUnmappedMtTab : renderUnmappedCompTab)();
+  }
+}
+
 /* ============================================================
    NAV / VIEW SWITCHING + CONTEXT-AWARE HEADER SEARCH
    ============================================================ */
@@ -92,10 +151,11 @@ const VIEW_LABELS = {
 let bcSearchQuery = '';
 let eoSearchQuery = '';
 function updateHeaderSearchForView(view){
+  const wrap = document.getElementById('search-wrap');
   const input = document.getElementById('global-search');
-  if (view === 'blending-config'){ input.disabled=false; input.placeholder='Search sports or competitions…'; input.value=bcSearchQuery; }
-  else if (view === 'event-overrides'){ input.disabled=false; input.placeholder='Search by event ID or name…'; input.value=eoSearchQuery; }
-  else { input.disabled=true; input.placeholder='Search available on Blending Configuration & Event Overrides'; input.value=''; }
+  if (view === 'blending-config'){ wrap.style.display='flex'; input.placeholder='Search sports or competitions…'; input.value=bcSearchQuery; }
+  else if (view === 'event-overrides'){ wrap.style.display='flex'; input.placeholder='Search by event ID or name…'; input.value=eoSearchQuery; }
+  else { wrap.style.display='none'; }
 }
 document.getElementById('global-search').addEventListener('input', function(){
   const view = document.querySelector('.nav-item.active')?.dataset.view;
@@ -149,6 +209,8 @@ document.getElementById('docs-close').addEventListener('click', ()=> document.ge
    ============================================================ */
 const pendingHierarchy = {}; // key -> providerId|null
 const openTreeNodes = new Set(); // persists expand/collapse state across re-renders
+let bcProviderFilter = '';
+const TREE_NAME_BASE = 290; // px — see renderHierarchyTree comment on column alignment
 
 function effectiveMatchTypeProvider(sport, comp, matchType){
   const key = `${comp.id}:${matchType}`;
@@ -169,6 +231,9 @@ function effectiveCompProvider(sport, comp){
   const sportProvider = (sportKey in pendingHierarchy) ? pendingHierarchy[sportKey] : sport.defaultProvider;
   return { value:sportProvider, source:'sport' };
 }
+function compEffectiveProviders(sport, comp){
+  return [ effectiveCompProvider(sport, comp).value, effectiveMatchTypeProvider(sport, comp, 'prematch').value, effectiveMatchTypeProvider(sport, comp, 'inplay').value ];
+}
 
 function providerOptions(selectedId, includeInherit, inheritLabel){
   let html = includeInherit ? `<option value="">${inheritLabel}</option>` : '';
@@ -176,18 +241,35 @@ function providerOptions(selectedId, includeInherit, inheritLabel){
   return html;
 }
 
+function populateProviderFilter(){
+  const sel = document.getElementById('bc-provider-filter');
+  PROVIDERS.forEach(p=> sel.innerHTML += `<option value="${p.id}">${p.name}</option>`);
+  sel.addEventListener('change', function(){
+    bcProviderFilter = this.value;
+    document.getElementById('bc-provider-filter-hint').textContent = bcProviderFilter
+      ? 'Showing only nodes where this provider is the effective provider, expanded.' : '';
+    renderHierarchyTree();
+  });
+}
+
+// Every tree row — regardless of depth — reserves the SAME total width
+// before the provider select starts, so all dropdowns line up in one
+// vertical column: indent(depth) + fixed icon area(42px) + name width(depth)
+// is constant, since name width shrinks by exactly the indent per level.
 function renderHierarchyTree(){
   const root = document.getElementById('hierarchy-tree');
   const q = bcSearchQuery.trim().toLowerCase();
+  const pf = bcProviderFilter;
   root.innerHTML = SPORTS.map(sport=>{
-    const compMatches = sport.competitions.filter(c=>c.name.toLowerCase().includes(q));
-    const sportMatches = sport.name.toLowerCase().includes(q);
-    if (q && !sportMatches && compMatches.length===0) return '';
-    const visibleComps = (q && !sportMatches) ? compMatches : sport.competitions;
-    if (q) openTreeNodes.add('sport-'+sport.id);
-
     const sportKey = `sport:${sport.id}`;
     const sportVal = (sportKey in pendingHierarchy) ? pendingHierarchy[sportKey] : sport.defaultProvider;
+    const sportTextMatches = !q || sport.name.toLowerCase().includes(q);
+
+    let visibleComps = sport.competitions.filter(c=> sportTextMatches || c.name.toLowerCase().includes(q));
+    if (pf) visibleComps = visibleComps.filter(comp=> compEffectiveProviders(sport, comp).includes(pf));
+    if ((q || pf) && visibleComps.length===0) return '';
+    if (q || pf) openTreeNodes.add('sport-'+sport.id);
+
     const isPending = sportKey in pendingHierarchy;
     const sportOpen = openTreeNodes.has('sport-'+sport.id);
     return `
@@ -195,8 +277,8 @@ function renderHierarchyTree(){
       <div class="tree-row ${sportOpen?'open':''}" data-toggle="sport-${sport.id}" style="${isPending?'background:var(--bg-warning);':''}">
         ${ICONS.chevron}
         ${ICONS.sportIcon}
-        <span class="name">${sport.name}</span>
-        <select class="select input-sm" style="width:150px;margin-left:8px;" onclick="event.stopPropagation()" onchange="onHierarchyChange('${sportKey}', this.value)">
+        <span class="name tree-name" style="width:${TREE_NAME_BASE}px;">${sport.name}</span>
+        <select class="select input-sm" style="width:180px;margin-left:8px;" onclick="event.stopPropagation()" onchange="onHierarchyChange('${sportKey}', this.value)">
           ${providerOptions(sportVal, false, '')}
         </select>
         <div class="tree-row__meta">
@@ -210,18 +292,18 @@ function renderHierarchyTree(){
           const eff = effectiveCompProvider(sport, comp);
           const isPendingComp = compKey in pendingHierarchy;
           const mapped = isMapped(eff.value, comp.id);
-          const compOpen = openTreeNodes.has('comp-'+comp.id) || !!q;
+          const compOpen = openTreeNodes.has('comp-'+comp.id) || !!q || !!pf;
           return `
           <div class="tree-node" data-comp="${comp.id}">
             <div class="tree-row ${compOpen?'open':''}" data-toggle="comp-${comp.id}" style="${isPendingComp?'background:var(--bg-warning);':''}">
               ${ICONS.chevron}
               ${ICONS.competitionIcon}
-              <span class="name">${comp.name}</span>
-              <select class="select input-sm" style="width:170px;margin-left:8px;" onclick="event.stopPropagation()" onchange="onHierarchyChange('${compKey}', this.value)">
+              <span class="name tree-name" style="width:${TREE_NAME_BASE-30}px;">${comp.name}</span>
+              <select class="select input-sm" style="width:180px;margin-left:8px;" onclick="event.stopPropagation()" onchange="onHierarchyChange('${compKey}', this.value)">
                 ${providerOptions(compKey in pendingHierarchy ? pendingHierarchy[compKey] : comp.defaultProvider, true, `Inherit from ${sport.name} (${providerById(sportVal)?.name||'none'})`)}
               </select>
               <div class="tree-row__meta">
-                ${!mapped?`<span title="Provider not mapped to GTH for this competition">${ICONS.alert.replace('<svg ', '<svg style="width:14px;height:14px;color:var(--fg-error)" ')}</span>`:''}
+                ${!mapped ? mapWarningHtml(eff.value, sport.id, comp.id, null) : ''}
                 <span class="count">${comp.events} events</span>
                 ${isPendingComp?'<span class="badge badge-yellow">unsaved</span>':''}
               </div>
@@ -235,14 +317,14 @@ function renderHierarchyTree(){
                 const mtMapped = isMapped(eff2.value, comp.id, mt);
                 return `
                 <div class="tree-row" style="${isPendingMt?'background:var(--bg-warning);':''}">
-                  <span style="width:12px;"></span>
-                  <span class="matchtype-dot ${mt}"></span>
-                  <span class="name" style="font-weight:500;">${label}</span>
-                  <select class="select input-sm" style="width:190px;margin-left:8px;" onchange="onHierarchyChange('${key}', this.value)">
+                  <span style="width:12px;flex:none;"></span>
+                  <span style="width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;flex:none;"><span class="matchtype-dot ${mt}"></span></span>
+                  <span class="name tree-name" style="font-weight:500;width:${TREE_NAME_BASE-60}px;">${label}</span>
+                  <select class="select input-sm" style="width:180px;margin-left:8px;" onchange="onHierarchyChange('${key}', this.value)">
                     ${providerOptions(key in pendingHierarchy ? pendingHierarchy[key] : (MATCHTYPE_DEFAULTS[key]||''), true, `Inherit (${providerById(eff2.value)?.name || 'none'})`)}
                   </select>
                   <div class="tree-row__meta">
-                    ${!mtMapped?`<span title="Provider not mapped to GTH">${ICONS.alert.replace('<svg ', '<svg style="width:13px;height:13px;color:var(--fg-error)" ')}</span>`:''}
+                    ${!mtMapped ? mapWarningHtml(eff2.value, sport.id, comp.id, mt) : ''}
                     ${isPendingMt?'<span class="badge badge-yellow">unsaved</span>':''}
                   </div>
                 </div>`;
@@ -252,7 +334,7 @@ function renderHierarchyTree(){
         }).join('')}
       </div>
     </div>`;
-  }).join('') || `<div class="empty-state">No sports or competitions match “${bcSearchQuery}”.</div>`;
+  }).join('') || `<div class="empty-state">No sports or competitions match the current filters.</div>`;
 
   root.querySelectorAll('[data-toggle]').forEach(row=>{
     row.addEventListener('click', ()=>{
@@ -411,7 +493,9 @@ function inlineProviderSelect(evt, matchType){
     PROVIDERS.map(p=>`<option value="${p.id}" ${eff.overridden && eff.value===p.id ? 'selected' : ''}>${p.name}</option>`).join('');
   const cls = eff.overridden ? 'override-select override-select--active' : 'override-select';
   const errStyle = !mapped ? 'border-color:var(--border-error);' : '';
-  return `<select class="select input-sm ${cls}" style="width:180px;${errStyle}" onchange="onInlineOverrideChange('${evt.id}','${matchType}', this.value)">${options}</select>`;
+  const select = `<select class="select input-sm ${cls}" style="width:170px;${errStyle}" onchange="onInlineOverrideChange('${evt.id}','${matchType}', this.value)">${options}</select>`;
+  if (mapped) return select;
+  return `<div class="flex-gap-1">${select}${mapWarningHtml(eff.value, sport.id, comp.id, matchType)}</div>`;
 }
 
 function renderEventsTable(){
@@ -604,21 +688,49 @@ function mappingDisplayRow(rec){
   const g = rec.status === 'suggested' ? rec.suggestion : rec.gth;
   return {
     id: rec.id, level: rec.level, provider: rec.provider, providerName: providerById(rec.provider).name,
-    providerSport: rec.providerSport, providerCompetition: rec.providerCompetition, providerMarketType: rec.providerMarketType || '—',
-    gthSport: g && g.sportId ? sportName(g.sportId) : '—',
-    gthCompetition: g && g.competitionId ? competitionName(g.competitionId) : '—',
-    gthMarketType: g && g.marketType ? g.marketType : (rec.level==='marketType' ? '—' : ''),
+    providerSport: rec.providerSport || '', providerCompetition: rec.providerCompetition || '', providerMarketType: rec.providerMarketType || '',
+    gthSport: g && g.sportId ? sportName(g.sportId) : '',
+    gthCompetition: g && g.competitionId ? competitionName(g.competitionId) : '',
+    gthMarketType: g && g.marketType ? g.marketType : '',
     confidence: rec.status==='suggested' ? rec.suggestion.confidence : null,
     status: rec.status, rejectReason: rec.rejectReason || '', updated: rec.updated || '', by: rec.by || '',
   };
 }
 
 const tableState = {};
-function getTableState(key){ return tableState[key] || (tableState[key] = { sortCol:null, sortDir:'asc', provider:'', text:'' }); }
+function getTableState(key){ return tableState[key] || (tableState[key] = { sortCol:null, sortDir:'asc', provider:'', text:'', colFilters:{} }); }
+
+// Simple provider+free-text filter, used by the Suggested Maps cards.
 function applyFilterSort(rows, state, textFields){
   let out = rows;
   if (state.provider) out = out.filter(r=>r.provider===state.provider);
   if (state.text){ const q=state.text.toLowerCase(); out = out.filter(r=> textFields.some(f=>String(r[f]||'').toLowerCase().includes(q))); }
+  if (state.sortCol){
+    out = out.slice().sort((a,b)=>{
+      const av=a[state.sortCol]??'', bv=b[state.sortCol]??'';
+      if (av<bv) return state.sortDir==='asc'?-1:1;
+      if (av>bv) return state.sortDir==='asc'?1:-1;
+      return 0;
+    });
+  }
+  return out;
+}
+// Per-column filter, used by the Active Mappings / Unmapped tables — every
+// column gets its own filter (exact match for selects, substring for text).
+function applyColumnFilterSort(rows, state, columns){
+  let out = rows;
+  const filters = state.colFilters || {};
+  columns.forEach(c=>{
+    if (c.key.startsWith('__')) return;
+    const val = filters[c.key];
+    if (!val) return;
+    if (c.filter === 'select'){
+      const field = c.rawKey || c.key;
+      out = out.filter(r=> String(r[field]) === String(val));
+    } else {
+      out = out.filter(r=> String(r[c.key]||'').toLowerCase().includes(String(val).toLowerCase()));
+    }
+  });
   if (state.sortCol){
     out = out.slice().sort((a,b)=>{
       const av=a[state.sortCol]??'', bv=b[state.sortCol]??'';
@@ -645,32 +757,90 @@ function renderFilterBar(containerId, stateKey, onchange, csvFn){
   inp.oninput = () => { state.text = inp.value; onchange(); };
   btn.onclick = csvFn;
 }
-function renderMappingTable(tableId, columns, rawRows, stateKey, rerender, actionsRenderer){
-  const state = getTableState(stateKey);
-  const textFields = columns.filter(c=>!c.key.startsWith('__')).map(c=>c.key);
-  const rows = applyFilterSort(rawRows, state, textFields);
-  const table = document.getElementById(tableId);
-  const thead = table.querySelector('thead'), tbody = table.querySelector('tbody');
-  thead.innerHTML = '<tr>' + columns.map(c=>{
+
+// Groups consecutive columns sharing the same .group into a spanning header
+// cell, so "PROVIDER (FEED)" vs "GTH (INTERNAL)" reads as one visual band.
+function renderGroupHeaderRow(columns){
+  const spans = [];
+  columns.forEach(c=>{
+    const g = c.group || null;
+    if (spans.length && spans[spans.length-1].group === g) spans[spans.length-1].count++;
+    else spans.push({group:g, count:1});
+  });
+  return '<tr class="group-header-row">' + spans.map(s=>{
+    const label = s.group === 'feed' ? 'PROVIDER (FEED)' : s.group === 'gth' ? 'GTH (INTERNAL)' : '';
+    const cls = s.group === 'gth' ? 'group-header-cell col-gth' : 'group-header-cell';
+    return `<th colspan="${s.count}" class="${cls}">${label}</th>`;
+  }).join('') + '</tr>';
+}
+function renderLabelRow(columns, state){
+  return '<tr class="label-row">' + columns.map(c=>{
     if (c.key.startsWith('__')) return '<th></th>';
     const arrow = state.sortCol===c.key ? (state.sortDir==='asc'?' ▲':' ▼') : '';
-    return `<th class="sortable" data-col="${c.key}">${c.label}${arrow}</th>`;
+    const cls = c.group==='gth' ? 'col-gth sortable' : 'sortable';
+    return `<th data-col="${c.key}" class="${cls}">${c.label}${arrow}</th>`;
   }).join('') + '</tr>';
-  thead.onclick = (e) => {
+}
+function renderColumnFilterRow(columns, state){
+  const filters = state.colFilters || (state.colFilters = {});
+  return '<tr class="filter-row">' + columns.map(c=>{
+    if (c.key.startsWith('__')) return '<th></th>';
+    const val = filters[c.key] || '';
+    const cls = c.group==='gth' ? 'col-gth' : '';
+    if (c.filter === 'select'){
+      const opts = typeof c.options === 'function' ? c.options() : c.options;
+      return `<th class="${cls}"><select class="select input-sm col-filter" data-col="${c.key}"><option value="">All</option>${opts.map(o=>`<option value="${o.value}" ${val===o.value?'selected':''}>${o.label}</option>`).join('')}</select></th>`;
+    }
+    return `<th class="${cls}"><input class="input input-sm col-filter" data-col="${c.key}" placeholder="Filter…" value="${String(val).replace(/"/g,'&quot;')}"></th>`;
+  }).join('') + '</tr>';
+}
+// Renders a full mapping table: group header + sortable labels + per-column
+// filter row + body. Preserves focus/cursor across re-renders so typing in
+// a filter input doesn't get interrupted by the table rebuilding itself.
+function renderMappingTable(tableId, columns, rawRows, stateKey, rerender, actionsRenderer){
+  const state = getTableState(stateKey);
+  const rows = applyColumnFilterSort(rawRows, state, columns);
+  const table = document.getElementById(tableId);
+  const thead = table.querySelector('thead'), tbody = table.querySelector('tbody');
+
+  const active = document.activeElement;
+  const wasInTable = active && table.contains(active);
+  const activeCol = wasInTable ? active.dataset.col : null;
+  const selStart = wasInTable && active.tagName==='INPUT' ? active.selectionStart : null;
+
+  thead.innerHTML = renderGroupHeaderRow(columns) + renderLabelRow(columns, state) + renderColumnFilterRow(columns, state);
+  thead.querySelector('.label-row').onclick = (e) => {
     const th = e.target.closest('[data-col]'); if(!th) return;
     const col = th.dataset.col;
     if (state.sortCol===col) state.sortDir = state.sortDir==='asc'?'desc':'asc'; else { state.sortCol=col; state.sortDir='asc'; }
     rerender();
   };
+  const filterRow = thead.querySelector('.filter-row');
+  filterRow.addEventListener('input', e=>{
+    const el = e.target.closest('[data-col]'); if(!el) return;
+    state.colFilters[el.dataset.col] = el.value;
+    rerender();
+  });
+  filterRow.addEventListener('change', e=>{
+    const el = e.target.closest('select[data-col]'); if(!el) return;
+    state.colFilters[el.dataset.col] = el.value;
+    rerender();
+  });
+
   tbody.innerHTML = rows.map(r=>'<tr>' + columns.map(c=>{
+    const gthAttr = c.group==='gth' ? ' class="col-gth"' : '';
     if (c.key==='__connector') return `<td style="text-align:center;width:32px;color:var(--fg-muted);">${ICONS.arrowRight}</td>`;
     if (c.key==='__actions') return `<td>${actionsRenderer(r)}</td>`;
-    if (c.key==='providerName') return `<td><span class="badge badge-gray">${r.providerName}</span></td>`;
-    if (c.key==='level') return `<td><span class="badge badge-gray">${r.level==='marketType'?'Market Type':'Competition'}</span></td>`;
-    if (c.key==='confidence') return r.confidence==null ? '<td>—</td>' : `<td><div class="flex-gap-2"><div class="confidence-bar" style="width:60px;"><div class="confidence-bar__fill" style="width:${r.confidence}%;background:${r.confidence>=85?'var(--green-solid)':'var(--yellow-solid)'};"></div></div><span style="font-size:11px;font-weight:600;">${r.confidence}%</span></div></td>`;
-    if (c.key==='status') return `<td>${r.status==='rejected'?`<span class="badge badge-yellow">Rejected — ${r.rejectReason}</span>`:'<span class="badge badge-red">Unmapped</span>'}</td>`;
-    return `<td>${r[c.key] || '—'}</td>`;
-  }).join('') + '</tr>').join('') || `<tr><td colspan="${columns.length}"><div class="empty-state">Nothing here.</div></td></tr>`;
+    if (c.key==='providerName') return `<td${gthAttr}><span class="badge badge-gray">${r.providerName}</span></td>`;
+    if (c.key==='confidence') return r.confidence==null ? `<td${gthAttr}>—</td>` : `<td${gthAttr}><div class="flex-gap-2"><div class="confidence-bar" style="width:60px;"><div class="confidence-bar__fill" style="width:${r.confidence}%;background:${r.confidence>=85?'var(--green-solid)':'var(--yellow-solid)'};"></div></div><span style="font-size:11px;font-weight:600;">${r.confidence}%</span></div></td>`;
+    if (c.key==='status') return `<td${gthAttr}>${r.status==='rejected'?`<span class="badge badge-yellow">Rejected — ${r.rejectReason}</span>`:'<span class="badge badge-red">Unmapped</span>'}</td>`;
+    return `<td${gthAttr}>${r[c.key] || '—'}</td>`;
+  }).join('') + '</tr>').join('') || `<tr><td colspan="${columns.length}"><div class="empty-state">Nothing matches these filters.</div></td></tr>`;
+
+  if (activeCol){
+    const el = thead.querySelector(`.filter-row [data-col="${activeCol}"]`);
+    if (el){ el.focus(); if (selStart!=null && el.setSelectionRange){ try{ el.setSelectionRange(selStart, selStart); }catch(e){} } }
+  }
 }
 function exportMappingCSV(rows, filename){
   downloadCSV(filename,
@@ -678,81 +848,113 @@ function exportMappingCSV(rows, filename){
     rows.map(r=>[r.providerName, r.level, r.providerSport, r.providerCompetition, r.providerMarketType, r.gthSport, r.gthCompetition, r.gthMarketType, r.confidence??'', r.status, r.rejectReason, r.updated, r.by]));
 }
 
-const COLS_SUGGESTED = [
-  {key:'providerName', label:'Provider'}, {key:'level', label:'Level'},
-  {key:'providerSport', label:'Provider Sport'}, {key:'providerCompetition', label:'Provider Competition'}, {key:'providerMarketType', label:'Provider Market Type'},
-  {key:'__connector', label:''},
-  {key:'gthSport', label:'Suggested GTH Sport'}, {key:'gthCompetition', label:'Suggested GTH Competition'}, {key:'gthMarketType', label:'Suggested Market Type'},
-  {key:'confidence', label:'Confidence'}, {key:'__actions', label:''},
-];
+const providerSelectOptions = () => PROVIDERS.map(p=>({value:p.id, label:p.name}));
+const marketTypeOptions = [{value:'Pre-Match',label:'Pre-Match'},{value:'In-Play',label:'In-Play'}];
+
+// Note: Market Type mappings have no competition columns — a provider's
+// Pre-Match/In-Play convention is mapped once per sport, not re-mapped
+// per competition (see data.js comment on GTH_MAPPINGS).
 const COLS_ACTIVE_COMP = [
-  {key:'providerName', label:'Provider'}, {key:'providerSport', label:'Provider Sport'}, {key:'providerCompetition', label:'Provider Competition'},
+  {key:'providerName', rawKey:'provider', label:'Provider', group:'feed', filter:'select', options:providerSelectOptions},
+  {key:'providerSport', label:'Provider Sport', group:'feed', filter:'text'},
+  {key:'providerCompetition', label:'Provider Competition', group:'feed', filter:'text'},
   {key:'__connector', label:''},
-  {key:'gthSport', label:'GTH Sport'}, {key:'gthCompetition', label:'GTH Competition'},
-  {key:'updated', label:'Last Updated'}, {key:'__actions', label:''},
+  {key:'gthSport', label:'GTH Sport', group:'gth', filter:'text'},
+  {key:'gthCompetition', label:'GTH Competition', group:'gth', filter:'text'},
+  {key:'updated', label:'Last Updated', filter:'text'}, {key:'__actions', label:''},
 ];
 const COLS_ACTIVE_MT = [
-  {key:'providerName', label:'Provider'}, {key:'providerSport', label:'Provider Sport'}, {key:'providerCompetition', label:'Provider Competition'}, {key:'providerMarketType', label:'Provider Market Type'},
+  {key:'providerName', rawKey:'provider', label:'Provider', group:'feed', filter:'select', options:providerSelectOptions},
+  {key:'providerSport', label:'Provider Sport', group:'feed', filter:'text'},
+  {key:'providerMarketType', label:'Provider Market Type', group:'feed', filter:'select', options:marketTypeOptions},
   {key:'__connector', label:''},
-  {key:'gthSport', label:'GTH Sport'}, {key:'gthCompetition', label:'GTH Competition'}, {key:'gthMarketType', label:'GTH Market Type'},
-  {key:'updated', label:'Last Updated'}, {key:'__actions', label:''},
+  {key:'gthSport', label:'GTH Sport', group:'gth', filter:'text'},
+  {key:'gthMarketType', label:'GTH Market Type', group:'gth', filter:'select', options:marketTypeOptions},
+  {key:'updated', label:'Last Updated', filter:'text'}, {key:'__actions', label:''},
 ];
 const COLS_UNMAPPED_COMP = [
-  {key:'providerName', label:'Provider'}, {key:'providerSport', label:'Provider Sport'}, {key:'providerCompetition', label:'Provider Competition'},
-  {key:'status', label:'Status'}, {key:'__actions', label:''},
+  {key:'providerName', rawKey:'provider', label:'Provider', group:'feed', filter:'select', options:providerSelectOptions},
+  {key:'providerSport', label:'Provider Sport', group:'feed', filter:'text'},
+  {key:'providerCompetition', label:'Provider Competition', group:'feed', filter:'text'},
+  {key:'status', label:'Status', filter:'select', options:[{value:'unmapped',label:'Unmapped'},{value:'rejected',label:'Rejected'}]},
+  {key:'__actions', label:''},
 ];
 const COLS_UNMAPPED_MT = [
-  {key:'providerName', label:'Provider'}, {key:'providerSport', label:'Provider Sport'}, {key:'providerCompetition', label:'Provider Competition'}, {key:'providerMarketType', label:'Provider Market Type'},
-  {key:'status', label:'Status'}, {key:'__actions', label:''},
+  {key:'providerName', rawKey:'provider', label:'Provider', group:'feed', filter:'select', options:providerSelectOptions},
+  {key:'providerSport', label:'Provider Sport', group:'feed', filter:'text'},
+  {key:'providerMarketType', label:'Provider Market Type', group:'feed', filter:'select', options:marketTypeOptions},
+  {key:'status', label:'Status', filter:'select', options:[{value:'unmapped',label:'Unmapped'},{value:'rejected',label:'Rejected'}]},
+  {key:'__actions', label:''},
 ];
 
 function renderSuggestedTab(){
-  const rows = GTH_MAPPINGS.filter(m=>m.status==='suggested').map(mappingDisplayRow);
-  renderFilterBar('filterbar-suggested', 'suggested', renderSuggestedTab, ()=>exportMappingCSV(rows,'suggested_maps.csv'));
-  renderMappingTable('table-suggested', COLS_SUGGESTED, rows, 'suggested', renderSuggestedTab, (r)=>`
-    <div class="flex-gap-1">
-      <button class="btn btn-sm btn-primary" onclick="acceptSuggestion('${r.id}')">Accept</button>
-      <button class="btn btn-sm btn-secondary" onclick="openGthSearch('${r.id}')">Change</button>
-      <button class="btn btn-sm btn-tertiary" onclick="openReject('${r.id}')">Reject</button>
-    </div>`);
+  const display = GTH_MAPPINGS.filter(m=>m.status==='suggested').map(mappingDisplayRow);
+  renderFilterBar('filterbar-suggested', 'suggested', renderSuggestedTab, ()=>exportMappingCSV(display,'suggested_maps.csv'));
+  const state = getTableState('suggested');
+  const rows = applyFilterSort(display, state, ['providerSport','providerCompetition','providerMarketType','gthSport','gthCompetition','gthMarketType']);
+  document.getElementById('suggested-cards').innerHTML = rows.map(r=>`
+    <div class="suggestion-card">
+      <div class="suggestion-card__feed">
+        <div class="flex-gap-1" style="margin-bottom:4px;">
+          <span class="badge badge-gray">${r.providerName}</span>
+          <span class="badge badge-gray">${r.level==='marketType'?'Market Type':'Competition'}</span>
+        </div>
+        <div class="suggestion-card__path">${providerPathLabel(r)}</div>
+      </div>
+      <div class="suggestion-card__arrow">${ICONS.arrowRight}</div>
+      <div class="suggestion-card__gth">
+        <div class="suggestion-card__label">AI SUGGESTION</div>
+        <div class="suggestion-card__path">${[r.gthSport, r.gthCompetition, r.gthMarketType].filter(Boolean).join(' → ')}</div>
+        <div class="flex-gap-2" style="margin-top:6px;">
+          <div class="confidence-bar" style="width:70px;"><div class="confidence-bar__fill" style="width:${r.confidence}%;background:${r.confidence>=85?'var(--green-solid)':'var(--yellow-solid)'};"></div></div>
+          <span style="font-size:11px;font-weight:600;">${r.confidence}%</span>
+        </div>
+      </div>
+      <div class="suggestion-card__actions">
+        <button class="btn btn-sm btn-primary" onclick="acceptSuggestion('${r.id}')">Accept</button>
+        <button class="btn btn-sm btn-secondary" onclick="openGthSearch('${r.id}')">Change</button>
+        <button class="btn btn-sm btn-tertiary" onclick="openReject('${r.id}')">Reject</button>
+      </div>
+    </div>
+  `).join('') || `<div class="empty-state">Nothing to review — all caught up.</div>`;
 }
 function renderActiveCompTab(){
   const rows = GTH_MAPPINGS.filter(m=>m.status==='active' && m.level==='competition').map(mappingDisplayRow);
-  renderFilterBar('filterbar-active-competitions', 'active-competitions', renderActiveCompTab, ()=>exportMappingCSV(rows,'active_mappings_competitions.csv'));
   renderMappingTable('table-active-competitions', COLS_ACTIVE_COMP, rows, 'active-competitions', renderActiveCompTab, (r)=>`
     <div class="flex-gap-1">
       <span class="icon-btn" style="width:24px;height:24px;" title="Edit" onclick="openGthSearch('${r.id}')">${ICONS.edit}</span>
       <span class="icon-btn" style="width:24px;height:24px;" title="History" onclick="showHistory('${r.id}')">${ICONS.history}</span>
       <span class="icon-btn" style="width:24px;height:24px;" title="Delete" onclick="deleteMapping('${r.id}')">${ICONS.trash}</span>
     </div>`);
+  document.getElementById('active-comp-export').onclick = ()=>exportMappingCSV(rows,'active_mappings_competitions.csv');
 }
 function renderActiveMtTab(){
   const rows = GTH_MAPPINGS.filter(m=>m.status==='active' && m.level==='marketType').map(mappingDisplayRow);
-  renderFilterBar('filterbar-active-markettypes', 'active-markettypes', renderActiveMtTab, ()=>exportMappingCSV(rows,'active_mappings_market_types.csv'));
   renderMappingTable('table-active-markettypes', COLS_ACTIVE_MT, rows, 'active-markettypes', renderActiveMtTab, (r)=>`
     <div class="flex-gap-1">
       <span class="icon-btn" style="width:24px;height:24px;" title="Edit" onclick="openGthSearch('${r.id}')">${ICONS.edit}</span>
       <span class="icon-btn" style="width:24px;height:24px;" title="History" onclick="showHistory('${r.id}')">${ICONS.history}</span>
       <span class="icon-btn" style="width:24px;height:24px;" title="Delete" onclick="deleteMapping('${r.id}')">${ICONS.trash}</span>
     </div>`);
+  document.getElementById('active-mt-export').onclick = ()=>exportMappingCSV(rows,'active_mappings_market_types.csv');
 }
 function renderUnmappedCompTab(){
   const rows = GTH_MAPPINGS.filter(m=>(m.status==='unmapped'||m.status==='rejected') && m.level==='competition').map(mappingDisplayRow);
-  renderFilterBar('filterbar-unmapped-competitions', 'unmapped-competitions', renderUnmappedCompTab, ()=>exportMappingCSV(rows,'unmapped_competitions.csv'));
   renderMappingTable('table-unmapped-competitions', COLS_UNMAPPED_COMP, rows, 'unmapped-competitions', renderUnmappedCompTab, (r)=>`
     <div class="flex-gap-1">
       <button class="btn btn-sm btn-secondary" onclick="openGthSearch('${r.id}')">Map</button>
       ${r.status==='unmapped' ? `<button class="btn btn-sm btn-tertiary" onclick="openReject('${r.id}')">Reject</button>` : ''}
     </div>`);
+  document.getElementById('unmapped-comp-export').onclick = ()=>exportMappingCSV(rows,'unmapped_competitions.csv');
 }
 function renderUnmappedMtTab(){
   const rows = GTH_MAPPINGS.filter(m=>(m.status==='unmapped'||m.status==='rejected') && m.level==='marketType').map(mappingDisplayRow);
-  renderFilterBar('filterbar-unmapped-markettypes', 'unmapped-markettypes', renderUnmappedMtTab, ()=>exportMappingCSV(rows,'unmapped_market_types.csv'));
   renderMappingTable('table-unmapped-markettypes', COLS_UNMAPPED_MT, rows, 'unmapped-markettypes', renderUnmappedMtTab, (r)=>`
     <div class="flex-gap-1">
       <button class="btn btn-sm btn-secondary" onclick="openGthSearch('${r.id}')">Map</button>
       ${r.status==='unmapped' ? `<button class="btn btn-sm btn-tertiary" onclick="openReject('${r.id}')">Reject</button>` : ''}
     </div>`);
+  document.getElementById('unmapped-mt-export').onclick = ()=>exportMappingCSV(rows,'unmapped_market_types.csv');
 }
 function refreshMappingCounts(){
   const suggestedCount = GTH_MAPPINGS.filter(m=>m.status==='suggested').length;
@@ -773,10 +975,10 @@ function acceptSuggestion(id){
   const rec = GTH_MAPPINGS.find(m=>m.id===id); if(!rec) return;
   rec.gth = { ...rec.suggestion };
   rec.status = 'active'; rec.updated = new Date().toISOString().slice(0,10); rec.by = 'm.tato';
-  markMapped(rec.provider, rec.gth.competitionId, rec.gth.marketType);
-  logAudit('Provider Mappings','Mapping confirmed',`${rec.providerSport} → ${rec.providerCompetition}${rec.providerMarketType?' → '+rec.providerMarketType:''} (${providerById(rec.provider).name}) mapped to GTH (AI suggested, accepted)`);
+  markMapped(rec.provider, rec.gth.sportId, rec.gth.competitionId, rec.gth.marketType);
+  logAudit('Provider Mappings','Mapping confirmed',`${providerPathLabel(rec)} (${providerById(rec.provider).name}) mapped to ${gthPathLabel(rec.gth)} (AI suggested, accepted)`);
   refreshAllMappingTabs(); renderHierarchyTree(); renderEventsTable();
-  toast('success','Mapping confirmed', `${rec.providerCompetition} → ${sportName(rec.gth.sportId)} / ${competitionName(rec.gth.competitionId)}`);
+  toast('success','Mapping confirmed', `${providerPathLabel(rec)} → ${gthPathLabel(rec.gth)}`);
 }
 let rejectTargetId = null;
 function openReject(id){ rejectTargetId = id; document.getElementById('reject-other-field').style.display='none'; document.getElementById('reject-reason').value='Deprecated'; document.getElementById('reject-other-text').value=''; openOverlay('overlay-reject'); }
@@ -788,28 +990,31 @@ document.getElementById('reject-confirm').addEventListener('click', ()=>{
   const otherText = document.getElementById('reject-other-text').value.trim();
   const reason = selected === 'Other' && otherText ? otherText : selected;
   rec.status = 'rejected'; rec.rejectReason = reason; rec.by = 'm.tato'; rec.updated = new Date().toISOString().slice(0,10);
-  logAudit('Provider Mappings','Mapping rejected',`${rec.providerCompetition} (${providerById(rec.provider).name}) marked Do Not Map (${reason})`);
+  logAudit('Provider Mappings','Mapping rejected',`${providerPathLabel(rec)} (${providerById(rec.provider).name}) marked Do Not Map (${reason})`);
   closeOverlay('overlay-reject');
   refreshAllMappingTabs();
-  toast('default','Marked as Do Not Map', rec.providerCompetition);
+  toast('default','Marked as Do Not Map', providerPathLabel(rec));
 });
 let gthSearchTargetId = null;
 let gthSearchResultsCache = [];
+// Market Type options are sport-wide (Pre-Match/In-Play per sport, no
+// competition); Competition options are the usual sport→competition list.
 function gthOptionsList(level){
   const list = [];
-  SPORTS.forEach(s=> s.competitions.forEach(c=>{
-    if (level==='competition') list.push({ sportId:s.id, competitionId:c.id, marketType:null, label:`${s.name} → ${c.name}` });
-    else {
-      list.push({ sportId:s.id, competitionId:c.id, marketType:'Pre-Match', label:`${s.name} → ${c.name} → Pre-Match` });
-      list.push({ sportId:s.id, competitionId:c.id, marketType:'In-Play', label:`${s.name} → ${c.name} → In-Play` });
-    }
-  }));
+  if (level === 'marketType'){
+    SPORTS.forEach(s=>{
+      list.push({ sportId:s.id, competitionId:null, marketType:'Pre-Match', label:`${s.name} → Pre-Match` });
+      list.push({ sportId:s.id, competitionId:null, marketType:'In-Play', label:`${s.name} → In-Play` });
+    });
+    return list;
+  }
+  SPORTS.forEach(s=> s.competitions.forEach(c=> list.push({ sportId:s.id, competitionId:c.id, marketType:null, label:`${s.name} → ${c.name}` })));
   return list;
 }
 function openGthSearch(id){
   gthSearchTargetId = id;
   const rec = GTH_MAPPINGS.find(m=>m.id===id);
-  document.getElementById('search-gth-subtitle').textContent = `Mapping: ${rec.providerSport} → ${rec.providerCompetition}${rec.providerMarketType?' → '+rec.providerMarketType:''} (${providerById(rec.provider).name})`;
+  document.getElementById('search-gth-subtitle').textContent = `Mapping: ${providerPathLabel(rec)} (${providerById(rec.provider).name})`;
   document.getElementById('gth-search-input').value='';
   renderGthResults('', rec.level);
   openOverlay('overlay-search-gth');
@@ -832,11 +1037,11 @@ function confirmGthMatch(idx){
   if (!rec) return closeOverlay('overlay-search-gth');
   rec.gth = { sportId:choice.sportId, competitionId:choice.competitionId, marketType:choice.marketType };
   rec.status = 'active'; rec.updated = new Date().toISOString().slice(0,10); rec.by = 'm.tato';
-  markMapped(rec.provider, rec.gth.competitionId, rec.gth.marketType);
-  logAudit('Provider Mappings','Mapping confirmed',`${rec.providerCompetition} (${providerById(rec.provider).name}) manually mapped to ${choice.label}`);
+  markMapped(rec.provider, rec.gth.sportId, rec.gth.competitionId, rec.gth.marketType);
+  logAudit('Provider Mappings','Mapping confirmed',`${providerPathLabel(rec)} (${providerById(rec.provider).name}) manually mapped to ${choice.label}`);
   refreshAllMappingTabs(); renderHierarchyTree(); renderEventsTable();
   closeOverlay('overlay-search-gth');
-  toast('success','Mapping confirmed', `${rec.providerCompetition} → ${choice.label}`);
+  toast('success','Mapping confirmed', `${providerPathLabel(rec)} → ${choice.label}`);
 }
 document.getElementById('gth-create-new').addEventListener('click', ()=>{
   closeOverlay('overlay-search-gth');
@@ -844,19 +1049,19 @@ document.getElementById('gth-create-new').addEventListener('click', ()=>{
 });
 function showHistory(id){
   const rec = GTH_MAPPINGS.find(m=>m.id===id);
-  toast('default','Mapping history', `${rec.providerCompetition} — 1 change on record. Full audit trail lives in the Audit Log screen.`);
+  toast('default','Mapping history', `${providerPathLabel(rec)} — 1 change on record. Full audit trail lives in the Audit Log screen.`);
 }
 function deleteMapping(id){
   const rec = GTH_MAPPINGS.find(m=>m.id===id); if(!rec) return;
   document.getElementById('confirm-title').textContent = 'Unmap this item?';
   document.getElementById('confirm-subtitle').textContent = 'It will move to Unmapped and can no longer be used in defaults or blending until re-mapped.';
-  document.getElementById('confirm-body').innerHTML = `<div class="alert alert-error">${ICONS.alert}<div><strong>${rec.providerCompetition}</strong> (${providerById(rec.provider).name}) currently mapped to ${sportName(rec.gth.sportId)} / ${competitionName(rec.gth.competitionId)}${rec.gth.marketType?' / '+rec.gth.marketType:''}</div></div>`;
+  document.getElementById('confirm-body').innerHTML = `<div class="alert alert-error">${ICONS.alert}<div><strong>${providerPathLabel(rec)}</strong> (${providerById(rec.provider).name}) currently mapped to ${gthPathLabel(rec.gth)}</div></div>`;
   document.getElementById('confirm-ok').onclick = () => {
     rec.status = 'unmapped'; delete rec.gth;
-    logAudit('Provider Mappings','Mapping deleted',`${rec.providerCompetition} (${providerById(rec.provider).name}) unmapped`);
+    logAudit('Provider Mappings','Mapping deleted',`${providerPathLabel(rec)} (${providerById(rec.provider).name}) unmapped`);
     refreshAllMappingTabs();
     closeOverlay('overlay-confirm');
-    toast('danger','Mapping removed', rec.providerCompetition);
+    toast('danger','Mapping removed', providerPathLabel(rec));
   };
   openOverlay('overlay-confirm');
 }
@@ -1096,7 +1301,7 @@ function handleAiInput(raw){
     const provider = m ? findProviderByName(m[1].trim()) : null;
     const items = GTH_MAPPINGS.filter(x=> (x.status==='suggested'||x.status==='unmapped') && (!provider || x.provider===provider.id));
     aiSay(items.length
-      ? `${items.length} unmapped item(s)${provider?` for ${provider.name}`:''}:<ul>${items.map(i=>`<li>${i.providerSport} → ${i.providerCompetition}${i.providerMarketType?' → '+i.providerMarketType:''}</li>`).join('')}</ul>`
+      ? `${items.length} unmapped item(s)${provider?` for ${provider.name}`:''}:<ul>${items.map(i=>`<li>${providerPathLabel(i)}</li>`).join('')}</ul>`
       : `No unmapped items${provider?` for ${provider.name}`:''} 🎉`);
     return;
   }
@@ -1127,6 +1332,7 @@ document.getElementById('ai-suggestions').innerHTML = AI_SUGGESTIONS.map(s=>`<sp
 function init(){
   aiSay(`Hi — I can configure providers or answer questions in plain language. Try: "Set BetRadar as default for Tennis" (Journey 6 from the PRD) or one of the suggestions below.`);
   updateHeaderSearchForView('blending-config');
+  populateProviderFilter();
   populateEventFilters();
   renderPresets();
   renderHierarchyTree();

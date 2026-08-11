@@ -6,7 +6,7 @@
 <title>Feed Provider Blending &amp; Integration Platform</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Murecho:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
 <div class="app-shell">
@@ -14,7 +14,7 @@
   <!-- ============ TOPBAR ============ -->
   <div class="topbar">
     <div class="topbar__brand"><span class="dot"></span> Feed Provider Platform</div>
-    <div class="topbar__search">
+    <div class="topbar__search" id="search-wrap">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <input id="global-search" placeholder="Search sports or competitions…">
       <span class="kbd">/</span>
@@ -91,6 +91,13 @@
           <button class="btn btn-tertiary" id="bc-export">Export CSV</button>
           <button class="btn btn-primary" id="bc-save" disabled>Save changes</button>
         </div>
+      </div>
+
+      <div class="flex-gap-2" style="margin-bottom:12px;">
+        <select class="select input-sm" id="bc-provider-filter" style="width:260px;">
+          <option value="">Filter by provider — show all</option>
+        </select>
+        <span class="muted" style="font-size:11px;" id="bc-provider-filter-hint"></span>
       </div>
 
       <div id="bc-pending-alert" style="display:none;margin-bottom:12px;">
@@ -264,12 +271,7 @@
       <!-- SUGGESTED MAPS -->
       <div class="tab-panel active" id="tab-suggested">
         <div class="card card-pad flex-gap-2" id="filterbar-suggested" style="margin-bottom:12px;flex-wrap:wrap;"></div>
-        <div class="card" style="overflow:auto;">
-          <table class="data-table" id="table-suggested">
-            <thead></thead>
-            <tbody></tbody>
-          </table>
-        </div>
+        <div id="suggested-cards"></div>
       </div>
 
       <!-- ACTIVE MAPPINGS -->
@@ -279,13 +281,13 @@
           <div class="tab" data-tab="active-markettypes">Market Types</div>
         </div>
         <div class="tab-panel active" id="tab-active-competitions">
-          <div class="card card-pad flex-gap-2" id="filterbar-active-competitions" style="margin-bottom:12px;flex-wrap:wrap;"></div>
+          <div class="flex-between" style="margin-bottom:8px;"><span class="muted" style="font-size:11px;">Filter any column below — type to filter, click a header to sort.</span><button class="btn btn-sm btn-tertiary" id="active-comp-export">Export CSV</button></div>
           <div class="card" style="overflow:auto;">
             <table class="data-table" id="table-active-competitions"><thead></thead><tbody></tbody></table>
           </div>
         </div>
         <div class="tab-panel" id="tab-active-markettypes">
-          <div class="card card-pad flex-gap-2" id="filterbar-active-markettypes" style="margin-bottom:12px;flex-wrap:wrap;"></div>
+          <div class="flex-between" style="margin-bottom:8px;"><span class="muted" style="font-size:11px;">Filter any column below — type to filter, click a header to sort.</span><button class="btn btn-sm btn-tertiary" id="active-mt-export">Export CSV</button></div>
           <div class="card" style="overflow:auto;">
             <table class="data-table" id="table-active-markettypes"><thead></thead><tbody></tbody></table>
           </div>
@@ -299,13 +301,13 @@
           <div class="tab" data-tab="unmapped-markettypes">Market Types</div>
         </div>
         <div class="tab-panel active" id="tab-unmapped-competitions">
-          <div class="card card-pad flex-gap-2" id="filterbar-unmapped-competitions" style="margin-bottom:12px;flex-wrap:wrap;"></div>
+          <div class="flex-between" style="margin-bottom:8px;"><span class="muted" style="font-size:11px;">Filter any column below — type to filter, click a header to sort.</span><button class="btn btn-sm btn-tertiary" id="unmapped-comp-export">Export CSV</button></div>
           <div class="card" style="overflow:auto;">
             <table class="data-table" id="table-unmapped-competitions"><thead></thead><tbody></tbody></table>
           </div>
         </div>
         <div class="tab-panel" id="tab-unmapped-markettypes">
-          <div class="card card-pad flex-gap-2" id="filterbar-unmapped-markettypes" style="margin-bottom:12px;flex-wrap:wrap;"></div>
+          <div class="flex-between" style="margin-bottom:8px;"><span class="muted" style="font-size:11px;">Filter any column below — type to filter, click a header to sort.</span><button class="btn btn-sm btn-tertiary" id="unmapped-mt-export">Export CSV</button></div>
           <div class="card" style="overflow:auto;">
             <table class="data-table" id="table-unmapped-markettypes"><thead></thead><tbody></tbody></table>
           </div>
@@ -523,8 +525,8 @@
   <div class="ai-messages" id="docs-body" style="display:block;"></div>
 </div>
 
-<script src="data.js?v=2"></script>
-<script src="docs.js?v=2"></script>
-<script src="app.js?v=2"></script>
+<script src="data.js?v=3"></script>
+<script src="docs.js?v=3"></script>
+<script src="app.js?v=3"></script>
 </body>
 </html>
