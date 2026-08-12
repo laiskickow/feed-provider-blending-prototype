@@ -114,13 +114,12 @@ function mapWarningHtml(providerId, sportId, competitionId, matchType){
 }
 // Jumps to Provider Mappings, lands on the right tab/sub-tab, and filters
 // straight to the record that explains (and fixes) a given warning.
+// Match Type (Pre-Match/In-Play) gaps are resolved via the Competition-level
+// mapping — Market Type (bet-type) mappings are a separate, sport-wide
+// concern and don't affect this gate — so this always routes to the
+// competition record regardless of which match type triggered the warning.
 function goToMappingFor(providerId, sportId, competitionId, matchType){
-  const marketType = matchType ? (matchType === 'prematch' ? 'Pre-Match' : 'In-Play') : null;
-  const rec = GTH_MAPPINGS.find(m=>{
-    if (m.provider !== providerId || m.status !== 'suggested') return false;
-    if (marketType) return m.level === 'marketType' && m.suggestion.sportId === sportId && m.suggestion.marketType === marketType;
-    return m.level === 'competition' && m.suggestion.competitionId === competitionId;
-  });
+  const rec = GTH_MAPPINGS.find(m=> m.provider === providerId && m.status === 'suggested' && m.level === 'competition' && m.suggestion.competitionId === competitionId);
   document.querySelector('.nav-item[data-view="mappings"]').click();
   if (rec){
     document.querySelector('.tab[data-tab="suggested"]').click();
@@ -130,13 +129,12 @@ function goToMappingFor(providerId, sportId, competitionId, matchType){
     renderSuggestedTab();
   } else {
     document.querySelector('.tab[data-tab="unmapped"]').click();
-    const subKey = marketType ? 'unmapped-markettypes' : 'unmapped-competitions';
-    document.querySelector(`.tab[data-tab="${subKey}"]`).click();
-    const state = getTableState(subKey);
+    document.querySelector('.tab[data-tab="unmapped-competitions"]').click();
+    const state = getTableState('unmapped-competitions');
     state.colFilters = state.colFilters || {};
     state.colFilters.providerSport = sportName(sportId);
     state.colFilters.providerCompetition = competitionId ? competitionName(competitionId) : '';
-    (marketType ? renderUnmappedMtTab : renderUnmappedCompTab)();
+    renderUnmappedCompTab();
   }
 }
 
@@ -849,11 +847,19 @@ function exportMappingCSV(rows, filename){
 }
 
 const providerSelectOptions = () => PROVIDERS.map(p=>({value:p.id, label:p.name}));
-const marketTypeOptions = [{value:'Pre-Match',label:'Pre-Match'},{value:'In-Play',label:'In-Play'}];
+// GTH market type names are a fixed, known catalog (see SPORT_MARKET_TYPES)
+// so a select makes sense there; a provider's own naming is free-form
+// ("1X2", "Moneyline", "Spread"...) so that column stays a text filter.
+const gthMarketTypeSelectOptions = () => {
+  const all = new Set();
+  Object.values(SPORT_MARKET_TYPES).forEach(list => list.forEach(mt => all.add(mt)));
+  return [...all].sort().map(v => ({value:v, label:v}));
+};
 
-// Note: Market Type mappings have no competition columns — a provider's
-// Pre-Match/In-Play convention is mapped once per sport, not re-mapped
-// per competition (see data.js comment on GTH_MAPPINGS).
+// Note: Market Type mappings have no competition columns — a provider's own
+// name for a bet type (e.g. "1X2") is mapped once per sport to GTH's
+// canonical name (e.g. "Match Odds"), not re-mapped per competition (see
+// SPORT_MARKET_TYPES / GTH_MAPPINGS comments in data.js).
 const COLS_ACTIVE_COMP = [
   {key:'providerName', rawKey:'provider', label:'Provider', group:'feed', filter:'select', options:providerSelectOptions},
   {key:'providerSport', label:'Provider Sport', group:'feed', filter:'text'},
@@ -866,10 +872,10 @@ const COLS_ACTIVE_COMP = [
 const COLS_ACTIVE_MT = [
   {key:'providerName', rawKey:'provider', label:'Provider', group:'feed', filter:'select', options:providerSelectOptions},
   {key:'providerSport', label:'Provider Sport', group:'feed', filter:'text'},
-  {key:'providerMarketType', label:'Provider Market Type', group:'feed', filter:'select', options:marketTypeOptions},
+  {key:'providerMarketType', label:'Provider Market Type', group:'feed', filter:'text'},
   {key:'__connector', label:''},
   {key:'gthSport', label:'GTH Sport', group:'gth', filter:'text'},
-  {key:'gthMarketType', label:'GTH Market Type', group:'gth', filter:'select', options:marketTypeOptions},
+  {key:'gthMarketType', label:'GTH Market Type', group:'gth', filter:'select', options:gthMarketTypeSelectOptions},
   {key:'updated', label:'Last Updated', filter:'text'}, {key:'__actions', label:''},
 ];
 const COLS_UNMAPPED_COMP = [
@@ -882,7 +888,7 @@ const COLS_UNMAPPED_COMP = [
 const COLS_UNMAPPED_MT = [
   {key:'providerName', rawKey:'provider', label:'Provider', group:'feed', filter:'select', options:providerSelectOptions},
   {key:'providerSport', label:'Provider Sport', group:'feed', filter:'text'},
-  {key:'providerMarketType', label:'Provider Market Type', group:'feed', filter:'select', options:marketTypeOptions},
+  {key:'providerMarketType', label:'Provider Market Type', group:'feed', filter:'text'},
   {key:'status', label:'Status', filter:'select', options:[{value:'unmapped',label:'Unmapped'},{value:'rejected',label:'Rejected'}]},
   {key:'__actions', label:''},
 ];
@@ -975,7 +981,7 @@ function acceptSuggestion(id){
   const rec = GTH_MAPPINGS.find(m=>m.id===id); if(!rec) return;
   rec.gth = { ...rec.suggestion };
   rec.status = 'active'; rec.updated = new Date().toISOString().slice(0,10); rec.by = 'm.tato';
-  markMapped(rec.provider, rec.gth.sportId, rec.gth.competitionId, rec.gth.marketType);
+  markMapped(rec.provider, rec.gth.competitionId);
   logAudit('Provider Mappings','Mapping confirmed',`${providerPathLabel(rec)} (${providerById(rec.provider).name}) mapped to ${gthPathLabel(rec.gth)} (AI suggested, accepted)`);
   refreshAllMappingTabs(); renderHierarchyTree(); renderEventsTable();
   toast('success','Mapping confirmed', `${providerPathLabel(rec)} → ${gthPathLabel(rec.gth)}`);
@@ -997,14 +1003,16 @@ document.getElementById('reject-confirm').addEventListener('click', ()=>{
 });
 let gthSearchTargetId = null;
 let gthSearchResultsCache = [];
-// Market Type options are sport-wide (Pre-Match/In-Play per sport, no
-// competition); Competition options are the usual sport→competition list.
+// Market Type options are sport-wide (the 5 canonical bet types per sport
+// from SPORT_MARKET_TYPES, no competition); Competition options are the
+// usual sport→competition list.
 function gthOptionsList(level){
   const list = [];
   if (level === 'marketType'){
     SPORTS.forEach(s=>{
-      list.push({ sportId:s.id, competitionId:null, marketType:'Pre-Match', label:`${s.name} → Pre-Match` });
-      list.push({ sportId:s.id, competitionId:null, marketType:'In-Play', label:`${s.name} → In-Play` });
+      (SPORT_MARKET_TYPES[s.id] || []).forEach(mt=>{
+        list.push({ sportId:s.id, competitionId:null, marketType:mt, label:`${s.name} → ${mt}` });
+      });
     });
     return list;
   }
@@ -1037,7 +1045,7 @@ function confirmGthMatch(idx){
   if (!rec) return closeOverlay('overlay-search-gth');
   rec.gth = { sportId:choice.sportId, competitionId:choice.competitionId, marketType:choice.marketType };
   rec.status = 'active'; rec.updated = new Date().toISOString().slice(0,10); rec.by = 'm.tato';
-  markMapped(rec.provider, rec.gth.sportId, rec.gth.competitionId, rec.gth.marketType);
+  markMapped(rec.provider, rec.gth.competitionId);
   logAudit('Provider Mappings','Mapping confirmed',`${providerPathLabel(rec)} (${providerById(rec.provider).name}) manually mapped to ${choice.label}`);
   refreshAllMappingTabs(); renderHierarchyTree(); renderEventsTable();
   closeOverlay('overlay-search-gth');

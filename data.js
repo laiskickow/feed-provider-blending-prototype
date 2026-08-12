@@ -159,6 +159,19 @@ const COVERAGE_GAPS = [
   { sport:'eBasketball', competition:'eBasketball Battle', issue:'1 market group (Player Props) uncovered by any mapped provider', severity:'error' },
 ];
 
+// ---- Canonical GTH market types, per sport --------------------------------
+// Market Type is a different dimension from Match Type (Pre-Match/In-Play):
+// it's the actual bet type (e.g. "Match Odds"), and it's sport-specific.
+// Each provider may name these slightly differently than GTH does, which is
+// exactly why the AI-suggestion matching in Provider Mappings is useful.
+const SPORT_MARKET_TYPES = {
+  soccer:      ['Match Odds', 'Both Teams to Score', 'Total Goals Over/Under', 'Correct Score', 'Double Chance'],
+  basketball:  ['Match Winner', 'Point Spread', 'Total Points Over/Under', 'Highest Scoring Quarter', 'Race to 20 Points'],
+  cricket:     ['Match Winner', 'Total Runs Over/Under', 'Top Batsman', 'Method of Next Dismissal', 'First Innings Runs'],
+  f1:          ['Race Winner', 'Podium Finish', 'Fastest Lap', 'Head-to-Head Matchup', 'Points Finish (Top 10)'],
+  ebasketball: ['Match Winner', 'Handicap', 'Total Points Over/Under', 'First to 20 Points', 'Highest Scoring Half'],
+};
+
 // ---- GTH Provider Mappings — unified model -----------------------------
 // One record per (provider, sport/competition[, market type]) pairing.
 // status: 'suggested' (AI match pending a decision) | 'active' (confirmed)
@@ -170,14 +183,14 @@ let GTH_MAPPINGS = [
   // -- Suggested (AI match pending accept / change / reject) --
   { id:'m1', level:'competition', provider:'betradar', providerSport:'Soccer Virtuals', providerCompetition:'Virtual Premier League', providerMarketType:null,
     suggestion:{ sportId:'soccer', competitionId:'sv-premier', marketType:null, confidence:96 }, status:'suggested' },
-  { id:'m2', level:'marketType', provider:'betradar', providerSport:'Soccer Virtuals', providerMarketType:'Pre-Match',
-    suggestion:{ sportId:'soccer', marketType:'Pre-Match', confidence:91 }, status:'suggested' },
+  { id:'m2', level:'marketType', provider:'betradar', providerSport:'Soccer Virtuals', providerMarketType:'1X2',
+    suggestion:{ sportId:'soccer', marketType:'Match Odds', confidence:91 }, status:'suggested' },
   { id:'m3', level:'competition', provider:'highlight', providerSport:'European Basketball', providerCompetition:'LNB Pro A', providerMarketType:null,
     suggestion:{ sportId:'basketball', competitionId:'eb-lnb', marketType:null, confidence:88 }, status:'suggested' },
   { id:'m4', level:'competition', provider:'inspired', providerSport:'Cricket', providerCompetition:'Caribbean Premier League T20', providerMarketType:null,
     suggestion:{ sportId:'cricket', competitionId:'cr-cpl', marketType:null, confidence:73 }, status:'suggested' },
-  { id:'m5', level:'marketType', provider:'betgenious', providerSport:'European Basketball', providerMarketType:'In-Play',
-    suggestion:{ sportId:'basketball', marketType:'In-Play', confidence:82 }, status:'suggested' },
+  { id:'m5', level:'marketType', provider:'betgenious', providerSport:'European Basketball', providerMarketType:'Moneyline',
+    suggestion:{ sportId:'basketball', marketType:'Match Winner', confidence:82 }, status:'suggested' },
 
   // -- Active — competitions --
   { id:'m6', level:'competition', provider:'betradar', providerSport:'European Basketball', providerCompetition:'EuroLeague', providerMarketType:null,
@@ -197,17 +210,17 @@ let GTH_MAPPINGS = [
   { id:'m13', level:'competition', provider:'highlight', providerSport:'F1', providerCompetition:'Formula 2', providerMarketType:null,
     gth:{ sportId:'f1', competitionId:'f1-f2', marketType:null }, status:'active', updated:'2026-04-02', by:'m.tato' },
 
-  // -- Active — market types (sport-wide: a provider's Pre-Match/In-Play
-  //    convention maps once per sport, never re-mapped per competition) --
-  { id:'m14', level:'marketType', provider:'betradar', providerSport:'European Basketball', providerMarketType:'In-Play',
-    gth:{ sportId:'basketball', marketType:'In-Play' }, status:'active', updated:'2026-07-28', by:'m.tato' },
-  { id:'m15', level:'marketType', provider:'highlight', providerSport:'F1', providerMarketType:'Pre-Match',
-    gth:{ sportId:'f1', marketType:'Pre-Match' }, status:'active', updated:'2026-04-02', by:'m.tato' },
+  // -- Active — market types (sport-wide: a provider's own name for a bet
+  //    type maps once per sport, never re-mapped per competition) --
+  { id:'m14', level:'marketType', provider:'betradar', providerSport:'European Basketball', providerMarketType:'Spread',
+    gth:{ sportId:'basketball', marketType:'Point Spread' }, status:'active', updated:'2026-07-28', by:'m.tato' },
+  { id:'m15', level:'marketType', provider:'highlight', providerSport:'F1', providerMarketType:'Winner',
+    gth:{ sportId:'f1', marketType:'Race Winner' }, status:'active', updated:'2026-04-02', by:'m.tato' },
 
   // -- Unmapped (no AI suggestion) --
   { id:'m16', level:'competition', provider:'betgenious', providerSport:'eBasketball', providerCompetition:'2K25 Global League', providerMarketType:null,
     status:'unmapped' },
-  { id:'m17', level:'marketType', provider:'inspired', providerSport:'Cricket', providerMarketType:'In-Play',
+  { id:'m17', level:'marketType', provider:'inspired', providerSport:'Cricket', providerMarketType:'Total Runs O/U',
     status:'unmapped' },
 
   // -- Rejected (Do Not Map) --
@@ -217,20 +230,17 @@ let GTH_MAPPINGS = [
     status:'rejected', rejectReason:'Out of Scope', by:'k.nguyen', updated:'2026-02-27' },
 ];
 
-// Clears the corresponding isMapped() gate when a mapping is confirmed/accepted.
-function markMapped(provider, sportId, competitionId, marketType){
-  // Sport-wide market-type mapping (no competitionId): clears the gate for
-  // every competition in that sport at once, since the mapping isn't
-  // competition-specific.
-  if (marketType && !competitionId){
-    const sport = SPORTS.find(s=>s.id===sportId);
-    const mt = marketType === 'Pre-Match' ? 'prematch' : 'inplay';
-    if (sport) sport.competitions.forEach(c=> UNMAPPED_PROVIDER_HIERARCHY.delete(`${provider}:${c.id}:${mt}`));
-    return;
-  }
+// Clears the corresponding isMapped() gate when a Competition-level mapping
+// is confirmed/accepted — this resolves both the general competition gate
+// and any Pre-Match/In-Play-specific gap for it. Market Type (bet-type)
+// mappings are a separate, sport-wide concern (see SPORT_MARKET_TYPES) and
+// don't gate Level 1 / Event Overrides validation at all, so this is a
+// no-op when called without a competitionId.
+function markMapped(provider, competitionId){
   if (!competitionId) return;
   UNMAPPED_PROVIDER_HIERARCHY.delete(`${provider}:${competitionId}`);
-  if (marketType) UNMAPPED_PROVIDER_HIERARCHY.delete(`${provider}:${competitionId}:${marketType==='Pre-Match'?'prematch':'inplay'}`);
+  UNMAPPED_PROVIDER_HIERARCHY.delete(`${provider}:${competitionId}:prematch`);
+  UNMAPPED_PROVIDER_HIERARCHY.delete(`${provider}:${competitionId}:inplay`);
 }
 
 // ---- Analytics ------------------------------------------------------------

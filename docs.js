@@ -50,6 +50,7 @@ const DOC_SECTIONS = [
     screen: 'Provider Mappings',
     body: [
       'Maps each provider’s own hierarchy (sport/competition/market type) to the internal GTH hierarchy. A provider item cannot be used as a default or in blending until mapped.',
+      '<b>Market Type ≠ Match Type.</b> Match Type (Pre-Match/In-Play) is the Level 1 timing dimension. Market Type is the actual bet type — e.g. "Match Odds", "Total Goals Over/Under" for Soccer, or "Race Winner", "Fastest Lap" for F1 — and is sport-specific (5 examples per sport in this mock). A provider\'s own name for a bet type is mapped once per sport to GTH\'s canonical name, independently of any competition.',
       '"Suggested Maps" — items never mapped, each with an AI-suggested GTH match (competitions and market types together). Accept, change (manual search), or reject with a reason.',
       '"Active Mappings" — confirmed mappings, split into Competitions and Market Types sub-tabs; editable, with history and delete.',
       '"Unmapped" — everything still needing a decision with no usable suggestion, plus previously-rejected items (both can be manually mapped from here).',
@@ -93,6 +94,7 @@ const DOC_SECTIONS = [
   {
     title: 'Change log',
     body: [
+      '11 Aug 2026 (latest) — Corrected Market Type to mean actual bet types (e.g. "Match Odds", "Race Winner"), not Pre-Match/In-Play — those were mistakenly conflated. Added 5 realistic market types per sport. Fixed the knock-on logic error this exposed: the "Fix this mapping" link for a Pre-Match/In-Play gap now always routes to the Competition-level mapping (the real lever for that gate) instead of a Market Type record, since Market Type mappings are sport-wide and don\'t affect Match Type validation at all.',
       '11 Aug 2026 — Documentation panel added. Header search made context-aware. Blending Configuration: added Collapse all + CSV export, moved provider selects next to the sport/competition name, added level icons for tree legibility. Event Overrides: fixed saved presets, added override row highlighting, replaced the override drawer with inline editable cells (drawer kept only for bulk override). Automation & Blending renamed to "Automated Actions"; "Blending Rules" tab replaced by a searchable/filterable Automation Log; duplicate alert list removed from Provider Health. Provider Mappings restructured: renamed tabs (Unmapped → Suggested Maps, Rejected → Unmapped), added Competitions/Market Types sub-tabs to Active Mappings and the new Unmapped tab, replaced bulky cards with dense sortable/filterable/exportable tables with structured columns.',
       '11 Aug 2026 (earlier) — Initial mocked prototype covering all 6 PRD areas.',
     ]
