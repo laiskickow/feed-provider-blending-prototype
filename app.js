@@ -1393,6 +1393,7 @@ function renderAuditLog(){
   const areaF = document.getElementById('al-filter-area').value;
   const userF = document.getElementById('al-filter-user').value.toLowerCase();
   const rows = AUDIT_LOG.filter(a=> (!areaF || a.area===areaF) && (!userF || a.user.toLowerCase().includes(userF)) );
+  document.getElementById('al-count').textContent = rows.length;
   document.getElementById('audit-tbody').innerHTML = rows.map(a=>`
     <tr>
       <td>${fmtDate(a.ts)}</td>

@@ -6,7 +6,7 @@
 <title>Feed Provider Blending &amp; Integration Platform</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Murecho:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=9">
+<link rel="stylesheet" href="styles.css?v=10">
 </head>
 <body>
 <!-- ============ SVG SPRITE — Lucide icons, Ivory stroke scale ============ -->
@@ -390,24 +390,32 @@
           <h1>Audit Log</h1>
           <p>Every configuration change across the platform — user, timestamp, before/after. Added as a companion screen to the audit-trail requirement in the PRD's non-functional section, which didn't specify a dedicated view.</p>
         </div>
-        <div class="view-header__actions">
-          <button class="btn btn-tertiary" id="al-export">Export CSV</button>
-        </div>
       </div>
-      <div class="card card-pad" style="margin-bottom:12px;display:flex;gap:12px;">
-        <select class="select" id="al-filter-area" style="width:220px;">
+
+      <div class="toolbar">
+        <div class="toolbar__search">
+          <svg class="ic ic-16" aria-hidden="true"><use href="#ic-search"/></svg>
+          <input id="al-filter-user" placeholder="Filter by user…" aria-label="Filter by user">
+        </div>
+        <select class="select input-sm" id="al-filter-area" style="width:220px;">
           <option value="">All areas</option>
           <option>Level 1 — Blending Config</option>
           <option>Level 2 — Event Overrides</option>
           <option>Provider Mappings</option>
         </select>
-        <input class="input" id="al-filter-user" placeholder="Filter by user…" style="width:200px;">
+        <div class="toolbar__actions">
+          <button class="btn btn-sm btn-tertiary" id="al-export">Export CSV</button>
+        </div>
       </div>
-      <div class="card" style="overflow:auto;">
-        <table class="data-table">
-          <thead><tr><th>Timestamp</th><th>User</th><th>Area</th><th>Action</th><th>Detail</th></tr></thead>
-          <tbody id="audit-tbody"></tbody>
-        </table>
+
+      <div class="card">
+        <div style="overflow:auto;max-height:620px;">
+          <table class="data-table">
+            <thead><tr><th>Timestamp</th><th>User</th><th>Area</th><th>Action</th><th>Detail</th></tr></thead>
+            <tbody id="audit-tbody"></tbody>
+          </table>
+        </div>
+        <div class="tbl-foot"><span><strong id="al-count">0</strong> entries</span></div>
       </div>
     </div>
 
@@ -584,8 +592,8 @@
   <div class="ai-messages" id="docs-body" style="display:block;"></div>
 </div>
 
-<script src="data.js?v=9"></script>
-<script src="docs.js?v=9"></script>
-<script src="app.js?v=9"></script>
+<script src="data.js?v=10"></script>
+<script src="docs.js?v=10"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>
