@@ -45,8 +45,8 @@ function providerChip(id, opts={}){
 }
 function statusBadge(status){
   return status === 'in-play'
-    ? `<span class="badge badge-red"><span class="dot"></span>In-Play</span>`
-    : `<span class="badge badge-blue"><span class="dot"></span>Pre-Match</span>`;
+    ? `<span class="badge badge-inplay">In-Play</span>`
+    : `<span class="badge badge-preplay">Pre-Match</span>`;
 }
 function healthBadge(status){
   const map = { operational:['badge-green','Operational'], degraded:['badge-yellow','Degraded'], down:['badge-red','Down'] };
@@ -496,8 +496,13 @@ document.getElementById('validation-goto-mappings').addEventListener('click', ()
 
 /* ============================================================
    LEVEL 2 — EVENT OVERRIDES
+   Overrides are staged in eoPending (confirm-to-save), one event at a
+   time — no multi-select. Key: `${eventId}:${matchType}` -> providerId
+   | null (null = revert to default).
    ============================================================ */
-let selectedEvents = new Set();
+const eoPending = {};
+let eoCustomRange = null; // { from:Date, to:Date } when the range filter is 'custom'
+function eoKey(id, mt){ return `${id}:${mt}`; }
 
 function populateEventFilters(){
   const sportSel = document.getElementById('eo-filter-sport');
@@ -509,8 +514,13 @@ function populateEventFilters(){
     if (sport) sport.competitions.forEach(c=> compSel.innerHTML += `<option value="${c.id}">${c.name}</option>`);
     renderEventsTable();
   });
-  ['eo-filter-competition','eo-filter-status','eo-filter-range','eo-filter-override'].forEach(id=>{
+  ['eo-filter-competition','eo-filter-status','eo-filter-override'].forEach(id=>{
     document.getElementById(id).addEventListener('change', renderEventsTable);
+  });
+  // Range: 'custom' opens the date-range picker; anything else filters directly
+  document.getElementById('eo-filter-range').addEventListener('change', function(){
+    if (this.value === 'custom') openDateRangeModal();
+    else { eoCustomRange = null; renderEventsTable(); }
   });
 }
 
@@ -525,12 +535,16 @@ function filteredEvents(){
     if (sport && e.sport !== sport) return false;
     if (comp && e.competition !== comp) return false;
     if (status && e.status !== status) return false;
-    if (range !== 'custom'){
+    if (range === 'custom'){
+      if (eoCustomRange){
+        if (e.start < eoCustomRange.from || e.start > eoCustomRange.to) return false;
+      }
+    } else {
       const maxH = parseInt(range,10)*24;
       const diffH = (e.start - now)/3600000;
       if (diffH > maxH || diffH < -6) return false;
     }
-    const overridden = !!(e.overrides.prematch || e.overrides.inplay);
+    const overridden = eventOverridden(e);
     if (hasOverride === 'yes' && !overridden) return false;
     if (hasOverride === 'no' && overridden) return false;
     if (q && !(e.id.toLowerCase().includes(q) || e.name.toLowerCase().includes(q))) return false;
@@ -538,15 +552,28 @@ function filteredEvents(){
   }).sort((a,b)=>a.start-b.start);
 }
 
-// The effective provider for a slot is always computed live from the Level-1
-// hierarchy, unless this event has an override for that specific slot.
+// Effective + committed/pending state for a slot. Pending wins over the
+// saved override, which wins over the live Level-1 default.
 function effectiveEventProvider(evt, matchType){
-  const ov = evt.overrides[matchType];
-  if (ov) return { value: ov.provider, overridden:true, meta:ov };
+  const pk = eoKey(evt.id, matchType);
   const sport = sportByCompetitionId(evt.competition);
   const comp = sport.competitions.find(c=>c.id===evt.competition);
-  const eff = effectiveMatchTypeProvider(sport, comp, matchType);
-  return { value: eff.value, overridden:false };
+  const dflt = effectiveMatchTypeProvider(sport, comp, matchType).value;
+  if (pk in eoPending){
+    const v = eoPending[pk];
+    return v ? { value:v, overridden:true, pending:true } : { value:dflt, overridden:false, pending:true };
+  }
+  const ov = evt.overrides[matchType];
+  if (ov) return { value: ov.provider, overridden:true, pending:false, meta:ov };
+  return { value: dflt, overridden:false, pending:false };
+}
+// Overridden = has a committed override, or a pending non-revert change
+function eventOverridden(evt){
+  return ['prematch','inplay'].some(mt=>{
+    const pk = eoKey(evt.id, mt);
+    if (pk in eoPending) return !!eoPending[pk];
+    return !!evt.overrides[mt];
+  });
 }
 
 function inlineProviderSelect(evt, matchType){
@@ -557,21 +584,26 @@ function inlineProviderSelect(evt, matchType){
   const defaultProv = effectiveMatchTypeProvider(sport, comp, matchType).value;
   const options = `<option value="">Use default (${providerById(defaultProv)?.name || 'none'})</option>` +
     PROVIDERS.map(p=>`<option value="${p.id}" ${eff.overridden && eff.value===p.id ? 'selected' : ''}>${p.name}</option>`).join('');
-  const cls = eff.overridden ? 'override-select override-select--active' : 'override-select';
+  const cls = 'override-select' + (eff.overridden ? ' override-select--active' : '') + (eff.pending ? ' override-select--pending' : '');
   const errStyle = !mapped ? 'border-color:var(--border-error);' : '';
+  const flag = eff.pending ? '<span class="badge badge-yellow" style="margin-left:6px;">unsaved</span>' : '';
   const select = `<select class="select input-sm ${cls}" style="width:170px;${errStyle}" onchange="onInlineOverrideChange('${evt.id}','${matchType}', this.value)">${options}</select>`;
-  if (mapped) return select;
-  return `<div class="flex-gap-1">${select}${mapWarningHtml(eff.value, sport.id, comp.id, matchType)}</div>`;
+  const warn = mapped ? '' : mapWarningHtml(eff.value, sport.id, comp.id, matchType);
+  return `<div class="flex-gap-1">${select}${warn}${flag}</div>`;
 }
 
 function renderEventsTable(){
   const rows = filteredEvents();
-  document.getElementById('eo-result-count').textContent = `${rows.length} event${rows.length!==1?'s':''}`;
+  document.getElementById('eo-result-count').textContent = rows.length;
+  const rangeSel = document.getElementById('eo-filter-range');
+  document.getElementById('eo-range-label').textContent =
+    (rangeSel.value === 'custom' && eoCustomRange)
+      ? `${fmtDate(eoCustomRange.from)} — ${fmtDate(eoCustomRange.to)}`
+      : rangeSel.options[rangeSel.selectedIndex].text;
   document.getElementById('events-tbody').innerHTML = rows.map(e=>{
-    const overridden = !!(e.overrides.prematch || e.overrides.inplay);
+    const overridden = eventOverridden(e);
     return `
-    <tr data-evt="${e.id}" class="${selectedEvents.has(e.id)?'selected':''} ${overridden?'row-override':''}">
-      <td><div class="checkbox ${selectedEvents.has(e.id)?'checked':''}" onclick="toggleEventSelect('${e.id}')">${selectedEvents.has(e.id)?ICONS.check():''}</div></td>
+    <tr data-evt="${e.id}" class="${overridden?'row-override':''}">
       <td><strong>${e.name}</strong><br><span class="mono">${e.id}</span></td>
       <td>${competitionName(e.competition)}</td>
       <td>${fmtDate(e.start)}<br><span class="muted" style="font-size:11px;">${relTime(e.start)}</span></td>
@@ -579,77 +611,125 @@ function renderEventsTable(){
       <td>${inlineProviderSelect(e,'prematch')}</td>
       <td>${inlineProviderSelect(e,'inplay')}</td>
     </tr>`;
-  }).join('') || `<tr><td colspan="7"><div class="empty-state">No events match these filters.</div></td></tr>`;
+  }).join('') || `<tr><td colspan="6"><div class="empty-state">No events match these filters.</div></td></tr>`;
+  updateEoPendingBar();
 }
-function toggleEventSelect(id){
-  if (selectedEvents.has(id)) selectedEvents.delete(id); else selectedEvents.add(id);
-  renderEventsTable();
-  const bar = document.getElementById('eo-bulk-bar');
-  bar.style.display = selectedEvents.size>0 ? 'flex' : 'none';
-  document.getElementById('eo-selected-count').textContent = `${selectedEvents.size} selected`;
-}
-document.getElementById('eo-bulk-clear').addEventListener('click', ()=>{ selectedEvents.clear(); renderEventsTable(); document.getElementById('eo-bulk-bar').style.display='none'; });
 
+// Stage a single-event, single-slot change — nothing commits until Save.
 function onInlineOverrideChange(eventId, matchType, value){
   const evt = EVENTS.find(e=>e.id===eventId);
-  const label = matchType==='prematch' ? 'Pre-Match' : 'In-Play';
-  if (!value){
-    evt.overrides[matchType] = null;
-    logAudit('Level 2 — Event Overrides','Override cleared',`${evt.id}: ${label} reverted to default`);
-    toast('default','Reverted to default', `${evt.name} — ${label}`);
-  } else {
-    evt.overrides[matchType] = { provider:value, at:new Date().toISOString(), by:'m.tato' };
-    const mapped = isMapped(value, evt.competition, matchType);
-    logAudit('Level 2 — Event Overrides','Override applied',`${evt.id}: ${label} → ${providerById(value).name}`);
-    if (!mapped) toast('warning','Override applied — mapping conflict', `${providerById(value).name} isn't mapped to this competition yet.`);
-    else toast('success','Override applied', `${evt.name} — ${label} → ${providerById(value).name}`);
-  }
+  const pk = eoKey(eventId, matchType);
+  const committed = evt.overrides[matchType] ? evt.overrides[matchType].provider : '';
+  // If the new value matches what's already committed, drop the pending entry
+  if ((value || '') === (committed || '')) delete eoPending[pk];
+  else eoPending[pk] = value || null;
   renderEventsTable();
 }
 
-// Bulk override (multi-select) still uses a drawer — the one case a single
-// inline cell can't cover.
-function openBulkOverrideDrawer(bulkIds){
-  document.getElementById('override-drawer-title').textContent = `Bulk override — ${bulkIds.length} events`;
-  document.getElementById('override-drawer-subtitle').textContent = 'Applies the selected provider(s) to every selected event. Leave a field blank to not touch that slot.';
-  document.getElementById('override-drawer-body').innerHTML = `
-    <div class="field">
-      <label>Pre-Match provider</label>
-      <select class="select" id="ov-prematch">
-        <option value="">Don't change</option>
-        ${PROVIDERS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}
-      </select>
-    </div>
-    <div class="field">
-      <label>In-Play provider</label>
-      <select class="select" id="ov-inplay">
-        <option value="">Don't change</option>
-        ${PROVIDERS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}
-      </select>
-    </div>
-  `;
-  document.getElementById('override-apply').onclick = () => {
-    const pre = document.getElementById('ov-prematch').value;
-    const inp = document.getElementById('ov-inplay').value;
-    bulkIds.map(id=>EVENTS.find(ev=>ev.id===id)).forEach(ev=>{
-      if (pre){ ev.overrides.prematch = {provider:pre, at:new Date().toISOString(), by:'m.tato'}; logAudit('Level 2 — Event Overrides','Override applied (bulk)',`${ev.id}: Pre-Match → ${providerById(pre).name}`); }
-      if (inp){ ev.overrides.inplay = {provider:inp, at:new Date().toISOString(), by:'m.tato'}; logAudit('Level 2 — Event Overrides','Override applied (bulk)',`${ev.id}: In-Play → ${providerById(inp).name}`); }
-    });
-    closeDrawer('drawer-override');
-    renderEventsTable();
-    toast('success', 'Bulk override applied', `${bulkIds.length} events updated.`);
-    selectedEvents.clear();
-    document.getElementById('eo-bulk-bar').style.display = 'none';
-  };
-  openDrawer('drawer-override');
+function updateEoPendingBar(){
+  const n = Object.keys(eoPending).length;
+  document.getElementById('eo-pending-count').textContent = n;
+  document.getElementById('eo-save').disabled = n===0;
+  document.getElementById('eo-action-bar').classList.toggle('open', n>0);
 }
-document.getElementById('eo-bulk-override').addEventListener('click', ()=> openBulkOverrideDrawer(Array.from(selectedEvents)));
+function eoPendingSummary(){
+  return Object.entries(eoPending).map(([pk, val])=>{
+    const [id, mt] = pk.split(':');
+    const evt = EVENTS.find(e=>e.id===id);
+    const label = mt==='prematch' ? 'Pre-Match' : 'In-Play';
+    const target = val ? providerById(val).name : 'Default (revert)';
+    const mapped = val ? isMapped(val, evt.competition, mt) : true;
+    return { evt, label, target, mapped };
+  });
+}
+document.getElementById('eo-discard').addEventListener('click', ()=>{
+  for (const k in eoPending) delete eoPending[k];
+  renderEventsTable();
+});
+document.getElementById('eo-save').addEventListener('click', ()=>{
+  const entries = eoPendingSummary();
+  Object.entries(eoPending).forEach(([pk, val])=>{
+    const [id, mt] = pk.split(':');
+    const evt = EVENTS.find(e=>e.id===id);
+    const label = mt==='prematch' ? 'Pre-Match' : 'In-Play';
+    if (val){
+      evt.overrides[mt] = { provider:val, at:new Date().toISOString(), by:'m.tato' };
+      logAudit('Level 2 — Event Overrides','Override applied',`${evt.id}: ${label} → ${providerById(val).name}`);
+    } else {
+      evt.overrides[mt] = null;
+      logAudit('Level 2 — Event Overrides','Override cleared',`${evt.id}: ${label} reverted to default`);
+    }
+  });
+  const n = Object.keys(eoPending).length;
+  const anyUnmapped = entries.some(e=>!e.mapped);
+  for (const k in eoPending) delete eoPending[k];
+  closeDrawer('drawer-override');
+  renderEventsTable();
+  if (anyUnmapped) toast('warning','Overrides saved — mapping conflict', `${n} change(s) saved; one or more providers aren't mapped to their competition yet.`);
+  else toast('success','Overrides saved', `${n} change(s) applied.`);
+});
+// "Review…" — the side drawer lists the staged changes to confirm & apply
+document.getElementById('eo-review').addEventListener('click', ()=>{
+  const entries = eoPendingSummary();
+  document.getElementById('override-drawer-title').textContent = 'Review overrides';
+  document.getElementById('override-drawer-subtitle').textContent = `${entries.length} staged change(s) — confirm to apply, or close to keep editing.`;
+  document.getElementById('override-drawer-body').innerHTML = entries.map(({evt, label, target, mapped})=>`
+    <div class="card card-pad" style="margin-bottom:8px;">
+      <div style="font-weight:var(--fw-semibold);color:var(--fg-title);">${evt.name}</div>
+      <div class="muted" style="font-size:11px;margin-bottom:6px;">${competitionName(evt.competition)} · ${evt.id}</div>
+      <div class="flex-gap-2">${label === 'Pre-Match' ? '<span class="badge badge-preplay">Pre-Match</span>' : '<span class="badge badge-inplay">In-Play</span>'} <span class="ic ic-16" style="color:var(--fg-muted)">→</span> <strong>${target}</strong></div>
+      ${!mapped ? `<div class="alert alert-warning" style="margin-top:8px;">${ICONS.alert()}<div>Not mapped to GTH for this competition yet.</div></div>` : ''}
+    </div>`).join('') || '<div class="empty-state">No staged changes.</div>';
+  const applyBtn = document.getElementById('override-apply');
+  applyBtn.textContent = 'Apply changes';
+  applyBtn.onclick = ()=> document.getElementById('eo-save').click();
+  openDrawer('drawer-override');
+});
 
-// Saved filter presets
+/* ---- Custom date & time range ---- */
+function toLocalInput(d){
+  const p = n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function openDateRangeModal(){
+  const from = eoCustomRange ? eoCustomRange.from : new Date(now);
+  const to = eoCustomRange ? eoCustomRange.to : new Date(now.getTime() + 7*86400000);
+  document.getElementById('dr-from').value = toLocalInput(from);
+  document.getElementById('dr-to').value = toLocalInput(to);
+  openOverlay('overlay-daterange');
+}
+document.getElementById('dr-apply').addEventListener('click', ()=>{
+  const from = new Date(document.getElementById('dr-from').value);
+  const to = new Date(document.getElementById('dr-to').value);
+  if (isNaN(from) || isNaN(to) || to < from){ toast('warning','Invalid range','Pick a valid start and end.'); return; }
+  eoCustomRange = { from, to };
+  closeOverlay('overlay-daterange');
+  renderEventsTable();
+});
+
+/* ---- Saved filter presets (centered modal + managed list) ---- */
+function currentEoFilters(){
+  return {
+    sport: document.getElementById('eo-filter-sport').value,
+    competition: document.getElementById('eo-filter-competition').value,
+    status: document.getElementById('eo-filter-status').value,
+    range: document.getElementById('eo-filter-range').value,
+    override: document.getElementById('eo-filter-override').value,
+  };
+}
 function renderPresets(){
-  document.getElementById('eo-presets-list').innerHTML = SAVED_PRESETS.map(p=>`
-    <span class="ai-suggestion-chip" onclick="applyPreset('${p.id}')">${p.name}</span>
-  `).join('') || '<span class="muted" style="font-size:12px;">No saved presets yet.</span>';
+  const list = document.getElementById('preset-list');
+  if (!list) return;
+  list.innerHTML = SAVED_PRESETS.map(p=>`
+    <div class="preset-row" data-id="${p.id}">
+      <div class="preset-row__main">
+        <div class="preset-row__name">${p.name}</div>
+        <div class="preset-row__date">Added ${new Date(p.createdAt).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</div>
+      </div>
+      <button class="btn btn-sm btn-tertiary" data-preset-action="apply">Apply</button>
+      <button class="icon-btn" data-preset-action="edit" aria-label="Rename preset">${ic('square-pen',16)}</button>
+      <button class="icon-btn" data-preset-action="delete" aria-label="Delete preset">${ic('trash-2',16)}</button>
+    </div>`).join('') || '<div class="muted" style="font-size:12px;">No saved presets yet.</div>';
 }
 function applyPreset(id){
   const p = SAVED_PRESETS.find(x=>x.id===id); if(!p) return;
@@ -660,23 +740,37 @@ function applyPreset(id){
     document.getElementById('eo-filter-status').value = p.filters.status;
     document.getElementById('eo-filter-range').value = p.filters.range;
     document.getElementById('eo-filter-override').value = p.filters.override;
+    if (p.filters.range !== 'custom') eoCustomRange = null;
     renderEventsTable();
   }, 0);
+  closeOverlay('overlay-presets');
   toast('default','Preset applied', p.name);
 }
-document.getElementById('eo-save-preset').addEventListener('click', ()=>{
-  const name = prompt('Name this filter preset:');
-  if (!name) return;
-  const filters = {
-    sport: document.getElementById('eo-filter-sport').value,
-    competition: document.getElementById('eo-filter-competition').value,
-    status: document.getElementById('eo-filter-status').value,
-    range: document.getElementById('eo-filter-range').value,
-    override: document.getElementById('eo-filter-override').value,
-  };
-  SAVED_PRESETS.push({ id:'p'+Date.now(), name, filters });
+document.getElementById('eo-presets-btn').addEventListener('click', ()=>{ renderPresets(); document.getElementById('preset-name-input').value=''; openOverlay('overlay-presets'); });
+document.getElementById('preset-save-btn').addEventListener('click', ()=>{
+  const input = document.getElementById('preset-name-input');
+  const name = input.value.trim();
+  if (!name){ input.focus(); return; }
+  SAVED_PRESETS.push({ id:'p'+Date.now(), name, createdAt:new Date().toISOString(), filters:currentEoFilters() });
+  input.value='';
   renderPresets();
   toast('success','Preset saved', name);
+});
+// Delegated actions on the preset list — apply / rename / delete
+document.getElementById('preset-list').addEventListener('click', e=>{
+  const btn = e.target.closest('[data-preset-action]');
+  if (!btn) return;
+  const id = btn.closest('.preset-row').dataset.id;
+  const p = SAVED_PRESETS.find(x=>x.id===id); if(!p) return;
+  const action = btn.dataset.presetAction;
+  if (action === 'apply') applyPreset(id);
+  else if (action === 'delete'){
+    const i = SAVED_PRESETS.findIndex(x=>x.id===id);
+    SAVED_PRESETS.splice(i,1); renderPresets(); toast('default','Preset deleted', p.name);
+  } else if (action === 'edit'){
+    const name = prompt('Rename preset:', p.name);
+    if (name && name.trim()){ p.name = name.trim(); renderPresets(); }
+  }
 });
 
 /* ============================================================

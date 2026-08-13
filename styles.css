@@ -415,6 +415,15 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
 
 .override-select{width:100%;}
 .override-select--active{border-color:var(--border-warning);background:var(--bg-warning);font-weight:var(--fw-semibold);color:var(--fg-title);}
+.override-select--pending{box-shadow:inset 3px 0 0 var(--border-warning);}
+
+/* Saved-preset management rows (inside the Filter presets modal) */
+.preset-row{display:flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) 0;border-bottom:1px solid var(--border-subtle);}
+.preset-row:last-child{border-bottom:0;}
+.preset-row__main{flex:1;min-width:0;}
+.preset-row__name{font-weight:var(--fw-semibold);color:var(--fg-title);font-size:var(--fs-xs);}
+.preset-row__date{font-size:11px;color:var(--fg-muted);}
+.preset-row .icon-btn{width:26px;height:26px;}
 
 /* Leaf card — the most granular level: Pre-Match + In-Play config together */
 .leaf-card{

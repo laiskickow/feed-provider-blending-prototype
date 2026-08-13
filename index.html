@@ -6,7 +6,7 @@
 <title>Feed Provider Blending &amp; Integration Platform</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Murecho:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=6">
+<link rel="stylesheet" href="styles.css?v=7">
 </head>
 <body>
 <!-- ============ SVG SPRITE — Lucide icons, Ivory stroke scale ============ -->
@@ -151,85 +151,69 @@
       <div class="view-header">
         <div>
           <h1>Event Overrides</h1>
-          <p>Per-event provider overrides for Pre-Match and In-Play, independently. Overrides persist across status transitions until manually cleared.</p>
-        </div>
-        <div class="view-header__actions">
-          <button class="btn btn-tertiary" id="eo-save-preset">Save filter preset</button>
+          <p>Per-event provider overrides for Pre-Match and In-Play, independently. Override one event at a time, then save. Overrides persist across status transitions until manually cleared.</p>
         </div>
       </div>
 
-      <div class="panel-split">
-        <div>
-          <div class="card card-pad" style="margin-bottom:12px;">
-            <div class="field">
-              <label>Sport</label>
-              <select class="select" id="eo-filter-sport"><option value="">All sports</option></select>
-            </div>
-            <div class="field">
-              <label>Competition</label>
-              <select class="select" id="eo-filter-competition"><option value="">All competitions</option></select>
-            </div>
-            <div class="field">
-              <label>Status</label>
-              <select class="select" id="eo-filter-status">
-                <option value="">Pre-Match &amp; In-Play</option>
-                <option value="pre-match">Pre-Match only</option>
-                <option value="in-play">In-Play only</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>Time range</label>
-              <select class="select" id="eo-filter-range">
-                <option value="7">Next 7 days (default)</option>
-                <option value="1">Next 24 hours</option>
-                <option value="3">Next 3 days</option>
-                <option value="30">Next 30 days</option>
-                <option value="custom">Custom range…</option>
-              </select>
-            </div>
-            <div class="field" style="margin-bottom:0;">
-              <label>Has override</label>
-              <select class="select" id="eo-filter-override">
-                <option value="">Any</option>
-                <option value="yes">Overridden only</option>
-                <option value="no">Inherited only</option>
-              </select>
-            </div>
-          </div>
-          <div class="card card-pad">
-            <div style="font-size:11px;font-weight:600;color:var(--fg-muted);margin-bottom:6px;">SAVED PRESETS</div>
-            <div class="flex-gap-2" style="flex-wrap:wrap;" id="eo-presets-list"></div>
-          </div>
+      <div class="toolbar">
+        <div class="toolbar__search">
+          <svg class="ic ic-16" aria-hidden="true"><use href="#ic-search"/></svg>
+          <input data-search="overrides" placeholder="Search by event ID or name…" aria-label="Search events">
+          <span class="kbd">/</span>
         </div>
+        <select class="select input-sm" id="eo-filter-sport" style="width:140px;"><option value="">All sports</option></select>
+        <select class="select input-sm" id="eo-filter-competition" style="width:168px;"><option value="">All competitions</option></select>
+        <select class="select input-sm" id="eo-filter-status" style="width:150px;">
+          <option value="">Pre-Match &amp; In-Play</option>
+          <option value="pre-match">Pre-Match only</option>
+          <option value="in-play">In-Play only</option>
+        </select>
+        <select class="select input-sm" id="eo-filter-range" style="width:150px;">
+          <option value="7">Next 7 days</option>
+          <option value="1">Next 24 hours</option>
+          <option value="3">Next 3 days</option>
+          <option value="30">Next 30 days</option>
+          <option value="custom">Custom range…</option>
+        </select>
+        <select class="select input-sm" id="eo-filter-override" style="width:150px;">
+          <option value="">Any override state</option>
+          <option value="yes">Overridden only</option>
+          <option value="no">Inherited only</option>
+        </select>
+        <div class="toolbar__actions">
+          <button class="btn btn-sm btn-tertiary" id="eo-presets-btn">Filter presets</button>
+        </div>
+      </div>
 
-        <div>
-          <div class="flex-between" style="margin-bottom:8px;">
-            <div class="flex-gap-2">
-              <span id="eo-result-count" class="muted" style="font-size:12px;"></span>
-            </div>
-            <div class="flex-gap-2" id="eo-bulk-bar" style="display:none;">
-              <span style="font-size:12px;font-weight:600;" id="eo-selected-count">0 selected</span>
-              <button class="btn btn-sm btn-secondary" id="eo-bulk-override">Bulk override…</button>
-              <button class="btn btn-sm btn-tertiary" id="eo-bulk-clear">Clear selection</button>
-            </div>
-          </div>
-          <div class="card" style="overflow:auto;max-height:640px;">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th style="width:28px;"></th>
-                  <th>Event</th>
-                  <th>Competition</th>
-                  <th>Start</th>
-                  <th>Status</th>
-                  <th>Pre-Match provider</th>
-                  <th>In-Play provider</th>
-                </tr>
-              </thead>
-              <tbody id="events-tbody"></tbody>
-            </table>
-          </div>
+      <div class="card">
+        <div style="overflow:auto;max-height:600px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Event</th>
+                <th>Competition</th>
+                <th>Start</th>
+                <th>Status</th>
+                <th>Pre-Match provider</th>
+                <th>In-Play provider</th>
+              </tr>
+            </thead>
+            <tbody id="events-tbody"></tbody>
+          </table>
         </div>
+        <div class="tbl-foot">
+          <span><strong id="eo-result-count">0</strong> events</span>
+          <span class="tbl-foot__right" id="eo-range-label"></span>
+        </div>
+      </div>
+
+      <!-- Save bar — confirm-to-save for staged overrides -->
+      <div class="action-bar" id="eo-action-bar">
+        <span><strong id="eo-pending-count">0</strong> unsaved override(s)</span>
+        <span class="sep"></span>
+        <button class="btn btn-sm btn-tertiary" id="eo-review">Review…</button>
+        <button class="btn btn-sm btn-tertiary" id="eo-discard">Discard</button>
+        <button class="btn btn-sm btn-primary" id="eo-save">Save changes</button>
       </div>
     </div>
 
@@ -508,6 +492,46 @@
   </div>
 </div>
 
+<!-- Filter presets modal -->
+<div class="overlay" id="overlay-presets">
+  <div class="modal">
+    <div class="modal__header">
+      <div><h3>Filter presets</h3><p>Save the current filter set, or apply and manage a saved one.</p></div>
+      <span class="close-x" data-close="overlay-presets"><svg class="ic ic-20" aria-hidden="true"><use href="#ic-x"/></svg></span>
+    </div>
+    <div class="modal__body">
+      <div class="field">
+        <label>Save current filters as</label>
+        <div class="flex-gap-2">
+          <input class="input" id="preset-name-input" placeholder="e.g. Cricket — next 7 days">
+          <button class="btn btn-primary" id="preset-save-btn" style="flex:none;">Save</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div style="font-size:11px;font-weight:var(--fw-bold);color:var(--fg-muted);letter-spacing:.4px;margin-bottom:8px;">SAVED PRESETS</div>
+      <div id="preset-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Custom date & time range modal -->
+<div class="overlay" id="overlay-daterange">
+  <div class="modal">
+    <div class="modal__header">
+      <div><h3>Custom date &amp; time range</h3><p>Show events starting within this window.</p></div>
+      <span class="close-x" data-close="overlay-daterange"><svg class="ic ic-20" aria-hidden="true"><use href="#ic-x"/></svg></span>
+    </div>
+    <div class="modal__body">
+      <div class="field"><label>From</label><input class="input" type="datetime-local" id="dr-from"></div>
+      <div class="field" style="margin-bottom:0;"><label>To</label><input class="input" type="datetime-local" id="dr-to"></div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn btn-tertiary" data-close="overlay-daterange">Cancel</button>
+      <button class="btn btn-primary" id="dr-apply">Apply range</button>
+    </div>
+  </div>
+</div>
+
 <!-- Event override drawer -->
 <div class="drawer" id="drawer-override">
   <div class="modal__header">
@@ -552,8 +576,8 @@
   <div class="ai-messages" id="docs-body" style="display:block;"></div>
 </div>
 
-<script src="data.js?v=6"></script>
-<script src="docs.js?v=6"></script>
-<script src="app.js?v=6"></script>
+<script src="data.js?v=7"></script>
+<script src="docs.js?v=7"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>
