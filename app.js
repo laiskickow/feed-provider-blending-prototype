@@ -3,21 +3,25 @@
    Vanilla JS, no build step. All writes are in-memory only.
    ============================================================ */
 
+// ic(name, size) — renders a sprite symbol with Ivory stroke scale.
+// size must be 12|16|20|24 (maps to .ic-N class with correct stroke-width).
+function ic(name, size, extra=''){
+  return `<svg class="ic ic-${size}${extra?' '+extra:''}" aria-hidden="true"><use href="#ic-${name}"/></svg>`;
+}
+
+// Shorthand aliases kept for readability at call sites
 const ICONS = {
-  chevron:  `<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>`,
-  check:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg>`,
-  x:        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>`,
-  edit:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>`,
-  trash:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6h12z"/></svg>`,
-  history:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>`,
-  external: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4h6v6M20 4L10 14M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>`,
-  alert:    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>`,
-  info:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>`,
-  more:     `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/></svg>`,
-  search:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>`,
-  arrowRight: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>`,
-  sportIcon: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--fg-muted);flex:none;"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>`,
-  competitionIcon: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--fg-muted);flex:none;"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>`,
+  chevron:        ()=> ic('chevron-right', 12, 'chev'),
+  check:          ()=> ic('check', 16),
+  x:              ()=> ic('x', 16),
+  edit:           ()=> ic('square-pen', 16),
+  trash:          ()=> ic('trash-2', 16),
+  history:        ()=> ic('history', 16),
+  alert:          ()=> ic('triangle-alert', 16),
+  search:         ()=> ic('search', 16),
+  arrowRight:     ()=> ic('arrow-right', 16),
+  sportIcon:      ()=> ic('layout-grid', 16, 'style="color:var(--fg-muted)"'),
+  competitionIcon:()=> ic('history', 16, 'style="color:var(--fg-muted)"'),
 };
 
 function relTime(iso){
@@ -53,7 +57,7 @@ function toast(kind, title, body, ms=4200){
   const stack = document.getElementById('toast-stack');
   const el = document.createElement('div');
   el.className = `toast toast-${kind}`;
-  el.innerHTML = `<div style="flex:1;"><strong>${title}</strong><p>${body||''}</p></div><span class="toast-close">${ICONS.x}</span>`;
+  el.innerHTML = `<div style="flex:1;"><strong>${title}</strong><p>${body||''}</p></div><span class="toast-close">${ICONS.x()}</span>`;
   el.querySelector('.toast-close').onclick = () => el.remove();
   stack.appendChild(el);
   setTimeout(()=>el.remove(), ms);
@@ -104,7 +108,7 @@ function mapWarningHtml(providerId, sportId, competitionId, matchType){
   const mtArg = matchType ? `'${matchType}'` : 'null';
   const compArg = competitionId ? `'${competitionId}'` : 'null';
   return `<span class="map-warning">
-    ${ICONS.alert.replace('<svg ', '<svg class="map-warning__icon" ')}
+    ${ic('triangle-alert', 16, 'map-warning__icon')}
     <div class="map-tooltip">
       <strong>Not mapped to GTH</strong>
       <p>${providerLabel} isn't mapped to <b>${scopeLabel}</b> in the internal hierarchy — it can't be used here until that's resolved.</p>
@@ -120,7 +124,7 @@ function mapWarningHtml(providerId, sportId, competitionId, matchType){
 // competition record regardless of which match type triggered the warning.
 function goToMappingFor(providerId, sportId, competitionId, matchType){
   const rec = GTH_MAPPINGS.find(m=> m.provider === providerId && m.status === 'suggested' && m.level === 'competition' && m.suggestion.competitionId === competitionId);
-  document.querySelector('.nav-item[data-view="mappings"]').click();
+  goToView('mappings');
   if (rec){
     document.querySelector('.tab[data-tab="suggested"]').click();
     const state = getTableState('suggested');
@@ -143,49 +147,67 @@ function goToMappingFor(providerId, sportId, competitionId, matchType){
    ============================================================ */
 const VIEW_LABELS = {
   'blending-config':'Blending Configuration', 'event-overrides':'Event Overrides',
-  'automation':'Automated Actions', 'analytics':'Provider Analytics',
-  'mappings':'Provider Mappings', 'audit-log':'Audit Log'
+  'mappings':'Provider Mappings', 'monitoring':'Monitoring', 'audit-log':'Audit Log'
 };
+let currentView = 'blending-config';
 let bcSearchQuery = '';
 let eoSearchQuery = '';
-function updateHeaderSearchForView(view){
-  const wrap = document.getElementById('search-wrap');
-  const input = document.getElementById('global-search');
-  if (view === 'blending-config'){ wrap.style.display='flex'; input.placeholder='Search sports or competitions…'; input.value=bcSearchQuery; }
-  else if (view === 'event-overrides'){ wrap.style.display='flex'; input.placeholder='Search by event ID or name…'; input.value=eoSearchQuery; }
-  else { wrap.style.display='none'; }
+function goToView(view){
+  if (!VIEW_LABELS[view]) return;
+  currentView = view;
+  document.querySelectorAll('.ivory-tab[data-view]').forEach(t=>{
+    const on = t.dataset.view === view;
+    t.setAttribute('aria-selected', on); t.tabIndex = on ? 0 : -1;
+  });
+  document.querySelectorAll('.main > .view').forEach(v=>{
+    v.classList.remove('active'); v.setAttribute('aria-hidden', 'true');
+  });
+  const panel = document.getElementById('view-'+view);
+  panel.classList.add('active'); panel.removeAttribute('aria-hidden');
+  document.getElementById('ai-context').textContent = 'Context: ' + VIEW_LABELS[view];
+  if (view === 'audit-log') renderAuditLog();
+  document.querySelector('.main').scrollTop = 0;
 }
-document.getElementById('global-search').addEventListener('input', function(){
-  const view = document.querySelector('.nav-item.active')?.dataset.view;
-  if (view === 'blending-config'){ bcSearchQuery = this.value; renderHierarchyTree(); }
-  else if (view === 'event-overrides'){ eoSearchQuery = this.value; renderEventsTable(); }
+// In-content search — each view owns a [data-search] input in its toolbar.
+// Delegated from .main so it survives every re-render and needs no per-view wiring.
+document.querySelector('.main').addEventListener('input', e=>{
+  const box = e.target.closest('[data-search]');
+  if (!box) return;
+  if (box.dataset.search === 'blending'){ bcSearchQuery = box.value; renderHierarchyTree(); }
+  else if (box.dataset.search === 'overrides'){ eoSearchQuery = box.value; renderEventsTable(); }
 });
-
-document.querySelectorAll('.nav-item[data-view]').forEach(item=>{
-  item.addEventListener('click', ()=>{
-    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-    item.classList.add('active');
-    const view = item.dataset.view;
-    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-    document.getElementById('view-'+view).classList.add('active');
-    document.getElementById('ai-context').textContent = 'Context: ' + VIEW_LABELS[view];
-    updateHeaderSearchForView(view);
-    if (view === 'audit-log') renderAuditLog();
+// WAI-ARIA tablist: click + roving Arrow/Home/End keyboard (auto-activating pattern)
+(function(){
+  const tablist = document.querySelector('[role="tablist"].ivory-tabs');
+  if (!tablist) return;
+  tablist.addEventListener('click', e=>{
+    const tab = e.target.closest('.ivory-tab[data-view]');
+    if (tab) goToView(tab.dataset.view);
   });
-});
-// Tabs (also handles nested sub-tabs, e.g. Active Mappings > Competitions/Market Types) —
-// scoped to direct-child tab-panels so an outer tab switch never disturbs a nested one.
-document.querySelectorAll('.tabs').forEach(tabbar=>{
-  tabbar.querySelectorAll('.tab').forEach(tab=>{
-    tab.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      tabbar.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-      tab.classList.add('active');
-      const panelWrap = tabbar.parentElement;
-      panelWrap.querySelectorAll(':scope > .tab-panel').forEach(p=>p.classList.remove('active'));
-      panelWrap.querySelector('#tab-'+tab.dataset.tab).classList.add('active');
-    });
+  tablist.addEventListener('keydown', e=>{
+    const tabs = [...tablist.querySelectorAll('.ivory-tab[data-view]')];
+    const idx = tabs.findIndex(t=>t===document.activeElement);
+    if (idx < 0) return;
+    let next = idx;
+    if      (e.key==='ArrowRight') next = (idx+1) % tabs.length;
+    else if (e.key==='ArrowLeft')  next = (idx-1+tabs.length) % tabs.length;
+    else if (e.key==='Home')       next = 0;
+    else if (e.key==='End')        next = tabs.length-1;
+    else return;
+    e.preventDefault(); tabs[next].focus(); goToView(tabs[next].dataset.view);
   });
+})();
+// Sub-tabs inside content panels — delegated from .main so they never interfere with the nav tablist
+document.querySelector('.main').addEventListener('click', e=>{
+  const tab = e.target.closest('.tabs .tab');
+  if (!tab) return;
+  e.stopPropagation();
+  const tabbar = tab.closest('.tabs');
+  tabbar.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  tab.classList.add('active');
+  const panelWrap = tabbar.parentElement;
+  panelWrap.querySelectorAll(':scope > .tab-panel').forEach(p=>p.classList.remove('active'));
+  panelWrap.querySelector('#tab-'+tab.dataset.tab).classList.add('active');
 });
 
 /* Theme toggle */
@@ -196,7 +218,7 @@ document.getElementById('theme-toggle').addEventListener('click', ()=>{
   renderRevenueChart(); renderBetsChart(); // re-render svg charts w/ theme-aware colors
 });
 
-document.getElementById('notif-btn').addEventListener('click', ()=> document.querySelector('.nav-item[data-view="mappings"]').click());
+document.getElementById('notif-btn').addEventListener('click', ()=> goToView('mappings'));
 
 /* Documentation panel */
 document.getElementById('docs-btn').addEventListener('click', ()=>{ renderDocsPanel(); document.getElementById('docs-panel').classList.add('open'); });
@@ -208,7 +230,23 @@ document.getElementById('docs-close').addEventListener('click', ()=> document.ge
 const pendingHierarchy = {}; // key -> providerId|null
 const openTreeNodes = new Set(); // persists expand/collapse state across re-renders
 let bcProviderFilter = '';
-const TREE_NAME_BASE = 290; // px — see renderHierarchyTree comment on column alignment
+function sourceLabel(src){
+  if (src==='own') return 'Explicit';
+  if (src==='sport') return '↑ Sport';
+  if (src==='competition') return '↑ Comp';
+  return '';
+}
+function visibleTreeModel(){
+  const q = bcSearchQuery.trim().toLowerCase();
+  const pf = bcProviderFilter;
+  return SPORTS.flatMap(sport=>{
+    const sportTextMatches = !q || sport.name.toLowerCase().includes(q);
+    let visibleComps = sport.competitions.filter(c=> sportTextMatches || c.name.toLowerCase().includes(q));
+    if (pf) visibleComps = visibleComps.filter(comp=> compEffectiveProviders(sport, comp).includes(pf));
+    if ((q || pf) && visibleComps.length===0) return [];
+    return [{ sport, visibleComps }];
+  });
+}
 
 function effectiveMatchTypeProvider(sport, comp, matchType){
   const key = `${comp.id}:${matchType}`;
@@ -250,41 +288,36 @@ function populateProviderFilter(){
   });
 }
 
-// Every tree row — regardless of depth — reserves the SAME total width
-// before the provider select starts, so all dropdowns line up in one
-// vertical column: indent(depth) + fixed icon area(42px) + name width(depth)
-// is constant, since name width shrinks by exactly the indent per level.
 function renderHierarchyTree(){
   const root = document.getElementById('hierarchy-tree');
   const q = bcSearchQuery.trim().toLowerCase();
   const pf = bcProviderFilter;
-  root.innerHTML = SPORTS.map(sport=>{
+  const model = visibleTreeModel();
+  if (q || pf) model.forEach(({sport})=> openTreeNodes.add('sport-'+sport.id));
+
+  root.innerHTML = model.map(({sport, visibleComps})=>{
     const sportKey = `sport:${sport.id}`;
     const sportVal = (sportKey in pendingHierarchy) ? pendingHierarchy[sportKey] : sport.defaultProvider;
-    const sportTextMatches = !q || sport.name.toLowerCase().includes(q);
-
-    let visibleComps = sport.competitions.filter(c=> sportTextMatches || c.name.toLowerCase().includes(q));
-    if (pf) visibleComps = visibleComps.filter(comp=> compEffectiveProviders(sport, comp).includes(pf));
-    if ((q || pf) && visibleComps.length===0) return '';
-    if (q || pf) openTreeNodes.add('sport-'+sport.id);
-
     const isPending = sportKey in pendingHierarchy;
     const sportOpen = openTreeNodes.has('sport-'+sport.id);
     return `
-    <div class="tree-node" data-sport="${sport.id}">
-      <div class="tree-row ${sportOpen?'open':''}" data-toggle="sport-${sport.id}" style="${isPending?'background:var(--bg-warning);':''}">
-        ${ICONS.chevron}
-        ${ICONS.sportIcon}
-        <span class="name tree-name" style="width:${TREE_NAME_BASE}px;">${sport.name}</span>
-        <select class="select input-sm" style="width:180px;margin-left:8px;" onclick="event.stopPropagation()" onchange="onHierarchyChange('${sportKey}', this.value)">
+    <div class="tree-node">
+      <div class="tree-row ${sportOpen?'open':''} ${isPending?'tree-row--pending':''}"
+           data-toggle="sport-${sport.id}" style="--depth:1"
+           role="row" aria-level="1" aria-expanded="${sportOpen}">
+        <div class="tree-row__lead">
+          ${ICONS.chevron()}${ICONS.sportIcon()}
+          <span class="name" title="${sport.name}">${sport.name}</span>
+        </div>
+        <select class="select input-sm" style="width:100%" data-key="${sportKey}">
           ${providerOptions(sportVal, false, '')}
         </select>
-        <div class="tree-row__meta">
-          <span class="count">${visibleComps.length} competitions</span>
-          ${isPending?'<span class="badge badge-yellow">unsaved</span>':''}
-        </div>
+        <div class="tree-cell--source"></div>
+        <div class="tree-cell--contains">${visibleComps.length} competition${visibleComps.length===1?'':'s'}</div>
+        <div class="tree-cell--gth"></div>
+        <div class="tree-cell--state">${isPending?'<span class="badge badge-yellow">unsaved</span>':''}</div>
       </div>
-      <div class="tree-children tree-lvl2 ${sportOpen?'open':''}" id="sport-${sport.id}">
+      <div class="tree-children ${sportOpen?'open':''}" id="sport-${sport.id}">
         ${visibleComps.map(comp=>{
           const compKey = `comp:${comp.id}`;
           const eff = effectiveCompProvider(sport, comp);
@@ -292,21 +325,23 @@ function renderHierarchyTree(){
           const mapped = isMapped(eff.value, comp.id);
           const compOpen = openTreeNodes.has('comp-'+comp.id) || !!q || !!pf;
           return `
-          <div class="tree-node" data-comp="${comp.id}">
-            <div class="tree-row ${compOpen?'open':''}" data-toggle="comp-${comp.id}" style="${isPendingComp?'background:var(--bg-warning);':''}">
-              ${ICONS.chevron}
-              ${ICONS.competitionIcon}
-              <span class="name tree-name" style="width:${TREE_NAME_BASE-30}px;">${comp.name}</span>
-              <select class="select input-sm" style="width:180px;margin-left:8px;" onclick="event.stopPropagation()" onchange="onHierarchyChange('${compKey}', this.value)">
-                ${providerOptions(compKey in pendingHierarchy ? pendingHierarchy[compKey] : comp.defaultProvider, true, `Inherit from ${sport.name} (${providerById(sportVal)?.name||'none'})`)}
-              </select>
-              <div class="tree-row__meta">
-                ${!mapped ? mapWarningHtml(eff.value, sport.id, comp.id, null) : ''}
-                <span class="count">${comp.events} events</span>
-                ${isPendingComp?'<span class="badge badge-yellow">unsaved</span>':''}
+          <div class="tree-node">
+            <div class="tree-row ${compOpen?'open':''} ${isPendingComp?'tree-row--pending':''}"
+                 data-toggle="comp-${comp.id}" style="--depth:2"
+                 role="row" aria-level="2" aria-expanded="${compOpen}">
+              <div class="tree-row__lead">
+                ${ICONS.chevron()}${ICONS.competitionIcon()}
+                <span class="name" title="${comp.name}">${comp.name}</span>
               </div>
+              <select class="select input-sm" style="width:100%" data-key="${compKey}">
+                ${providerOptions(compKey in pendingHierarchy ? pendingHierarchy[compKey] : comp.defaultProvider, true, `Inherit · ${providerById(sportVal)?.name||'—'}`)}
+              </select>
+              <div class="tree-cell--source">${sourceLabel(eff.source)}</div>
+              <div class="tree-cell--contains">${comp.events} event${comp.events===1?'':'s'}</div>
+              <div class="tree-cell--gth">${!mapped?mapWarningHtml(eff.value, sport.id, comp.id, null):''}</div>
+              <div class="tree-cell--state">${isPendingComp?'<span class="badge badge-yellow">unsaved</span>':''}</div>
             </div>
-            <div class="tree-children tree-lvl3 ${compOpen?'open':''}" id="comp-${comp.id}">
+            <div class="tree-children ${compOpen?'open':''}" id="comp-${comp.id}">
               ${['prematch','inplay'].map(mt=>{
                 const key = `${comp.id}:${mt}`;
                 const label = mt==='prematch' ? 'Pre-Match' : 'In-Play';
@@ -314,17 +349,20 @@ function renderHierarchyTree(){
                 const isPendingMt = key in pendingHierarchy;
                 const mtMapped = isMapped(eff2.value, comp.id, mt);
                 return `
-                <div class="tree-row" style="${isPendingMt?'background:var(--bg-warning);':''}">
-                  <span style="width:12px;flex:none;"></span>
-                  <span style="width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;flex:none;"><span class="matchtype-dot ${mt}"></span></span>
-                  <span class="name tree-name" style="font-weight:500;width:${TREE_NAME_BASE-60}px;">${label}</span>
-                  <select class="select input-sm" style="width:180px;margin-left:8px;" onchange="onHierarchyChange('${key}', this.value)">
-                    ${providerOptions(key in pendingHierarchy ? pendingHierarchy[key] : (MATCHTYPE_DEFAULTS[key]||''), true, `Inherit (${providerById(eff2.value)?.name || 'none'})`)}
-                  </select>
-                  <div class="tree-row__meta">
-                    ${!mtMapped ? mapWarningHtml(eff2.value, sport.id, comp.id, mt) : ''}
-                    ${isPendingMt?'<span class="badge badge-yellow">unsaved</span>':''}
+                <div class="tree-row ${isPendingMt?'tree-row--pending':''}"
+                     style="--depth:3" role="row" aria-level="3">
+                  <div class="tree-row__lead">
+                    <span style="width:12px;flex:none"></span>
+                    <span style="width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;flex:none"><span class="matchtype-dot ${mt}"></span></span>
+                    <span class="name">${label}</span>
                   </div>
+                  <select class="select input-sm" style="width:100%" data-key="${key}">
+                    ${providerOptions(key in pendingHierarchy ? pendingHierarchy[key] : (MATCHTYPE_DEFAULTS[key]||''), true, `Inherit · ${providerById(eff2.value)?.name||'—'}`)}
+                  </select>
+                  <div class="tree-cell--source">${sourceLabel(eff2.source)}</div>
+                  <div class="tree-cell--contains"></div>
+                  <div class="tree-cell--gth">${!mtMapped?mapWarningHtml(eff2.value, sport.id, comp.id, mt):''}</div>
+                  <div class="tree-cell--state">${isPendingMt?'<span class="badge badge-yellow">unsaved</span>':''}</div>
                 </div>`;
               }).join('')}
             </div>
@@ -332,18 +370,29 @@ function renderHierarchyTree(){
         }).join('')}
       </div>
     </div>`;
-  }).join('') || `<div class="empty-state">No sports or competitions match the current filters.</div>`;
+  }).join('') || `<div class="empty-state" style="padding:var(--sp-4)">No sports or competitions match the current filters.</div>`;
 
-  root.querySelectorAll('[data-toggle]').forEach(row=>{
-    row.addEventListener('click', ()=>{
-      const id = row.dataset.toggle;
-      if (openTreeNodes.has(id)) openTreeNodes.delete(id); else openTreeNodes.add(id);
-      row.classList.toggle('open');
-      document.getElementById(id).classList.toggle('open');
-    });
-  });
   updatePendingBar();
 }
+
+// Delegated listeners — bound once, survive every re-render
+(function(){
+  const root = document.getElementById('hierarchy-tree');
+  root.addEventListener('click', e=>{
+    if (e.target.closest('select, .map-warning, a')) return;
+    const row = e.target.closest('[data-toggle]');
+    if (!row) return;
+    const id = row.dataset.toggle;
+    if (openTreeNodes.has(id)) openTreeNodes.delete(id); else openTreeNodes.add(id);
+    row.classList.toggle('open');
+    document.getElementById(id).classList.toggle('open');
+    row.setAttribute('aria-expanded', openTreeNodes.has(id));
+  });
+  root.addEventListener('change', e=>{
+    const sel = e.target.closest('select[data-key]');
+    if (sel) onHierarchyChange(sel.dataset.key, sel.value);
+  });
+})();
 
 function onHierarchyChange(key, value){
   pendingHierarchy[key] = value || null;
@@ -366,14 +415,22 @@ document.getElementById('bc-collapse-all').addEventListener('click', ()=>{
 document.getElementById('bc-export').addEventListener('click', ()=>{
   const headers = ['Sport','Competition','Match Type','Effective Provider','Source','GTH Mapped'];
   const rows = [];
-  SPORTS.forEach(sport=> sport.competitions.forEach(comp=>{
-    ['prematch','inplay'].forEach(mt=>{
-      const eff = effectiveMatchTypeProvider(sport, comp, mt);
-      rows.push([sport.name, comp.name, mt==='prematch'?'Pre-Match':'In-Play', providerById(eff.value)?.name || '(none)', eff.source, isMapped(eff.value, comp.id, mt)?'Yes':'No']);
+  visibleTreeModel().forEach(({sport, visibleComps})=>{
+    visibleComps.forEach(comp=>{
+      ['prematch','inplay'].forEach(mt=>{
+        const eff = effectiveMatchTypeProvider(sport, comp, mt);
+        rows.push([sport.name, comp.name, mt==='prematch'?'Pre-Match':'In-Play',
+          providerById(eff.value)?.name||'(none)', eff.source, isMapped(eff.value, comp.id, mt)?'Yes':'No']);
+      });
     });
-  }));
-  downloadCSV('blending_configuration.csv', headers, rows);
-  toast('success','Export ready', 'blending_configuration.csv downloaded.');
+  });
+  const totalRows = SPORTS.reduce((n,s)=> n + s.competitions.length * 2, 0);
+  const filtered = rows.length < totalRows;
+  const filename = filtered ? 'blending_configuration_filtered.csv' : 'blending_configuration.csv';
+  downloadCSV(filename, headers, rows);
+  toast('success','Export ready', filtered
+    ? `${filename} — ${rows.length} of ${totalRows} rows (current filters applied).`
+    : `${filename} — ${rows.length} rows.`);
 });
 
 document.getElementById('bc-save').addEventListener('click', ()=>{
@@ -398,7 +455,7 @@ document.getElementById('bc-save').addEventListener('click', ()=>{
   if (unmapped.length){
     document.getElementById('validation-unmapped-items').innerHTML = unmapped.map(u=>`
       <div class="alert alert-warning" style="margin-bottom:8px;">
-        ${ICONS.alert} <div><strong>${u.path}</strong>No confirmed mapping to internal GTH hierarchy.</div>
+        ${ICONS.alert()} <div><strong>${u.path}</strong>No confirmed mapping to internal GTH hierarchy.</div>
       </div>`).join('');
     openOverlay('overlay-validation');
     return;
@@ -423,7 +480,7 @@ document.getElementById('bc-save').addEventListener('click', ()=>{
 });
 document.getElementById('validation-goto-mappings').addEventListener('click', ()=>{
   closeOverlay('overlay-validation');
-  document.querySelector('.nav-item[data-view="mappings"]').click();
+  goToView('mappings');
 });
 
 /* ============================================================
@@ -503,7 +560,7 @@ function renderEventsTable(){
     const overridden = !!(e.overrides.prematch || e.overrides.inplay);
     return `
     <tr data-evt="${e.id}" class="${selectedEvents.has(e.id)?'selected':''} ${overridden?'row-override':''}">
-      <td><div class="checkbox ${selectedEvents.has(e.id)?'checked':''}" onclick="toggleEventSelect('${e.id}')">${selectedEvents.has(e.id)?ICONS.check:''}</div></td>
+      <td><div class="checkbox ${selectedEvents.has(e.id)?'checked':''}" onclick="toggleEventSelect('${e.id}')">${selectedEvents.has(e.id)?ICONS.check():''}</div></td>
       <td><strong>${e.name}</strong><br><span class="mono">${e.id}</span></td>
       <td>${competitionName(e.competition)}</td>
       <td>${fmtDate(e.start)}<br><span class="muted" style="font-size:11px;">${relTime(e.start)}</span></td>
@@ -630,7 +687,7 @@ function renderAutomationLog(){
   ).sort((a,b)=>new Date(b.ts)-new Date(a.ts));
   document.getElementById('automation-log-list').innerHTML = rows.map(a=>{
     const [cls,label] = typeMap[a.type];
-    return `<div class="flex-gap-3" style="padding:10px 14px;border-bottom:1px solid var(--border-subtle);align-items:flex-start;">
+    return `<div class="flex-gap-3" style="padding:10px 14px;border-bottom:1px solid var(--border-muted);align-items:flex-start;">
       <span class="badge ${cls}" style="flex:none;margin-top:2px;">${label}</span>
       <div style="flex:1;">
         <div style="font-size:12px;">${a.text}</div>
@@ -675,7 +732,7 @@ function renderCoverage(){
   }).join('');
   document.getElementById('coverage-gaps-list').innerHTML = COVERAGE_GAPS.map(g=>`
     <div class="alert alert-${g.severity==='error'?'error':'warning'}" style="margin-bottom:8px;">
-      ${ICONS.alert}<div><strong>${g.sport} — ${g.competition}</strong>${g.issue}</div>
+      ${ICONS.alert()}<div><strong>${g.sport} — ${g.competition}</strong>${g.issue}</div>
     </div>`).join('') || `<div class="empty-state">No coverage gaps detected.</div>`;
 }
 
@@ -827,7 +884,7 @@ function renderMappingTable(tableId, columns, rawRows, stateKey, rerender, actio
 
   tbody.innerHTML = rows.map(r=>'<tr>' + columns.map(c=>{
     const gthAttr = c.group==='gth' ? ' class="col-gth"' : '';
-    if (c.key==='__connector') return `<td style="text-align:center;width:32px;color:var(--fg-muted);">${ICONS.arrowRight}</td>`;
+    if (c.key==='__connector') return `<td style="text-align:center;width:32px;color:var(--fg-muted);">${ICONS.arrowRight()}</td>`;
     if (c.key==='__actions') return `<td>${actionsRenderer(r)}</td>`;
     if (c.key==='providerName') return `<td${gthAttr}><span class="badge badge-gray">${r.providerName}</span></td>`;
     if (c.key==='confidence') return r.confidence==null ? `<td${gthAttr}>—</td>` : `<td${gthAttr}><div class="flex-gap-2"><div class="confidence-bar" style="width:60px;"><div class="confidence-bar__fill" style="width:${r.confidence}%;background:${r.confidence>=85?'var(--green-solid)':'var(--yellow-solid)'};"></div></div><span style="font-size:11px;font-weight:600;">${r.confidence}%</span></div></td>`;
@@ -907,7 +964,7 @@ function renderSuggestedTab(){
         </div>
         <div class="suggestion-card__path">${providerPathLabel(r)}</div>
       </div>
-      <div class="suggestion-card__arrow">${ICONS.arrowRight}</div>
+      <div class="suggestion-card__arrow">${ICONS.arrowRight()}</div>
       <div class="suggestion-card__gth">
         <div class="suggestion-card__label">AI SUGGESTION</div>
         <div class="suggestion-card__path">${[r.gthSport, r.gthCompetition, r.gthMarketType].filter(Boolean).join(' → ')}</div>
@@ -928,9 +985,9 @@ function renderActiveCompTab(){
   const rows = GTH_MAPPINGS.filter(m=>m.status==='active' && m.level==='competition').map(mappingDisplayRow);
   renderMappingTable('table-active-competitions', COLS_ACTIVE_COMP, rows, 'active-competitions', renderActiveCompTab, (r)=>`
     <div class="flex-gap-1">
-      <span class="icon-btn" style="width:24px;height:24px;" title="Edit" onclick="openGthSearch('${r.id}')">${ICONS.edit}</span>
-      <span class="icon-btn" style="width:24px;height:24px;" title="History" onclick="showHistory('${r.id}')">${ICONS.history}</span>
-      <span class="icon-btn" style="width:24px;height:24px;" title="Delete" onclick="deleteMapping('${r.id}')">${ICONS.trash}</span>
+      <span class="icon-btn" style="width:24px;height:24px;" title="Edit" onclick="openGthSearch('${r.id}')">${ICONS.edit()}</span>
+      <span class="icon-btn" style="width:24px;height:24px;" title="History" onclick="showHistory('${r.id}')">${ICONS.history()}</span>
+      <span class="icon-btn" style="width:24px;height:24px;" title="Delete" onclick="deleteMapping('${r.id}')">${ICONS.trash()}</span>
     </div>`);
   document.getElementById('active-comp-export').onclick = ()=>exportMappingCSV(rows,'active_mappings_competitions.csv');
 }
@@ -938,9 +995,9 @@ function renderActiveMtTab(){
   const rows = GTH_MAPPINGS.filter(m=>m.status==='active' && m.level==='marketType').map(mappingDisplayRow);
   renderMappingTable('table-active-markettypes', COLS_ACTIVE_MT, rows, 'active-markettypes', renderActiveMtTab, (r)=>`
     <div class="flex-gap-1">
-      <span class="icon-btn" style="width:24px;height:24px;" title="Edit" onclick="openGthSearch('${r.id}')">${ICONS.edit}</span>
-      <span class="icon-btn" style="width:24px;height:24px;" title="History" onclick="showHistory('${r.id}')">${ICONS.history}</span>
-      <span class="icon-btn" style="width:24px;height:24px;" title="Delete" onclick="deleteMapping('${r.id}')">${ICONS.trash}</span>
+      <span class="icon-btn" style="width:24px;height:24px;" title="Edit" onclick="openGthSearch('${r.id}')">${ICONS.edit()}</span>
+      <span class="icon-btn" style="width:24px;height:24px;" title="History" onclick="showHistory('${r.id}')">${ICONS.history()}</span>
+      <span class="icon-btn" style="width:24px;height:24px;" title="Delete" onclick="deleteMapping('${r.id}')">${ICONS.trash()}</span>
     </div>`);
   document.getElementById('active-mt-export').onclick = ()=>exportMappingCSV(rows,'active_mappings_market_types.csv');
 }
@@ -966,11 +1023,20 @@ function refreshMappingCounts(){
   const suggestedCount = GTH_MAPPINGS.filter(m=>m.status==='suggested').length;
   const unmappedTabCount = GTH_MAPPINGS.filter(m=>m.status==='unmapped'||m.status==='rejected').length;
   const needsAttention = GTH_MAPPINGS.filter(m=>m.status==='suggested'||m.status==='unmapped').length;
-  document.getElementById('unmapped-count').textContent = needsAttention;
-  document.getElementById('mapping-nav-badge').textContent = needsAttention;
-  document.getElementById('suggested-tab-badge').textContent = suggestedCount;
-  document.getElementById('unmapped-tab-badge').textContent = unmappedTabCount;
-  document.getElementById('notif-btn').querySelector('.badge-count').style.display = needsAttention===0 ? 'none' : 'flex';
+  const unmappedEl = document.getElementById('unmapped-count');
+  if (unmappedEl) unmappedEl.textContent = needsAttention;
+  const navBadge = document.getElementById('mapping-nav-badge');
+  if (navBadge){
+    navBadge.textContent = needsAttention;
+    navBadge.style.display = needsAttention === 0 ? 'none' : '';
+    navBadge.setAttribute('aria-label', `${needsAttention} mapping${needsAttention===1?'':'s'} need attention`);
+  }
+  const suggBadge = document.getElementById('suggested-tab-badge');
+  if (suggBadge){ suggBadge.textContent = suggestedCount; suggBadge.style.display = suggestedCount===0?'none':''; }
+  const unmBadge = document.getElementById('unmapped-tab-badge');
+  if (unmBadge){ unmBadge.textContent = unmappedTabCount; unmBadge.style.display = unmappedTabCount===0?'none':''; }
+  const notif = document.getElementById('notif-btn');
+  if (notif){ const bc = notif.querySelector('.badge-count'); if(bc) bc.style.display = needsAttention===0 ? 'none' : 'flex'; }
 }
 function refreshAllMappingTabs(){
   renderSuggestedTab(); renderActiveCompTab(); renderActiveMtTab(); renderUnmappedCompTab(); renderUnmappedMtTab();
@@ -1030,7 +1096,7 @@ function openGthSearch(id){
 function renderGthResults(query, level){
   gthSearchResultsCache = gthOptionsList(level).filter(g=>g.label.toLowerCase().includes(query.toLowerCase())).slice(0,8);
   document.getElementById('gth-search-results').innerHTML = gthSearchResultsCache.map((r,i)=>`
-    <div class="flex-between" style="padding:8px 4px;border-bottom:1px solid var(--border-subtle);font-size:13px;">
+    <div class="flex-between" style="padding:8px 4px;border-bottom:1px solid var(--border-muted);font-size:13px;">
       <span>${r.label}</span>
       <button class="btn btn-sm btn-secondary" onclick="confirmGthMatch(${i})">Select</button>
     </div>`).join('') || `<div class="muted" style="font-size:12px;padding:8px 4px;">No matches.</div>`;
@@ -1063,7 +1129,7 @@ function deleteMapping(id){
   const rec = GTH_MAPPINGS.find(m=>m.id===id); if(!rec) return;
   document.getElementById('confirm-title').textContent = 'Unmap this item?';
   document.getElementById('confirm-subtitle').textContent = 'It will move to Unmapped and can no longer be used in defaults or blending until re-mapped.';
-  document.getElementById('confirm-body').innerHTML = `<div class="alert alert-error">${ICONS.alert}<div><strong>${providerPathLabel(rec)}</strong> (${providerById(rec.provider).name}) currently mapped to ${gthPathLabel(rec.gth)}</div></div>`;
+  document.getElementById('confirm-body').innerHTML = `<div class="alert alert-error">${ICONS.alert()}<div><strong>${providerPathLabel(rec)}</strong> (${providerById(rec.provider).name}) currently mapped to ${gthPathLabel(rec.gth)}</div></div>`;
   document.getElementById('confirm-ok').onclick = () => {
     rec.status = 'unmapped'; delete rec.gth;
     logAudit('Provider Mappings','Mapping deleted',`${providerPathLabel(rec)} (${providerById(rec.provider).name}) unmapped`);
@@ -1258,7 +1324,7 @@ function handleAiInput(raw){
       ], ()=>{
         pendingHierarchy[`sport:${sport.id}`] = provider.id;
         renderHierarchyTree();
-        aiSay(`Done — queued as a pending change on the Blending Configuration screen. <a onclick="document.querySelector('.nav-item[data-view=blending-config]').click(); document.getElementById('ai-panel').classList.remove('open');" style="color:var(--blue-fg);cursor:pointer;text-decoration:underline;">Open Blending Configuration</a> to review and save.`);
+        aiSay(`Done — queued as a pending change on the Blending Configuration screen. <a onclick="goToView('blending-config'); document.getElementById('ai-panel').classList.remove('open');" style="color:var(--blue-fg);cursor:pointer;text-decoration:underline;">Open Blending Configuration</a> to review and save.`);
       }), 300);
     };
     pendingAiYes = yesHandler;
@@ -1271,7 +1337,7 @@ function handleAiInput(raw){
 
   // "map A's B to our B"
   if (/^map /.test(lower)){
-    aiSay(`I found 1 close match in Provider Mappings for that description. <a onclick="document.querySelector('.nav-item[data-view=mappings]').click(); document.getElementById('ai-panel').classList.remove('open');" style="color:var(--blue-fg);cursor:pointer;text-decoration:underline;">Review it in Provider Mappings</a> — I'll act on it there so you can double-check the AI suggestion before confirming.`);
+    aiSay(`I found 1 close match in Provider Mappings for that description. <a onclick="goToView('mappings'); document.getElementById('ai-panel').classList.remove('open');" style="color:var(--blue-fg);cursor:pointer;text-decoration:underline;">Review it in Provider Mappings</a> — I'll act on it there so you can double-check the AI suggestion before confirming.`);
     return;
   }
 
@@ -1291,7 +1357,7 @@ function handleAiInput(raw){
       evt.overrides[mt] = { provider: provider.id, at:new Date().toISOString(), by:'m.tato' };
       logAudit('Level 2 — Event Overrides','Override applied (via AI Assistant)',`${evt.id}: ${mtLabel} → ${provider.name}`);
       renderEventsTable();
-      aiSay(`Applied. <a onclick="document.querySelector('.nav-item[data-view=event-overrides]').click(); document.getElementById('ai-panel').classList.remove('open');" style="color:var(--blue-fg);cursor:pointer;text-decoration:underline;">Open Event Overrides</a> to see it.`);
+      aiSay(`Applied. <a onclick="goToView('event-overrides'); document.getElementById('ai-panel').classList.remove('open');" style="color:var(--blue-fg);cursor:pointer;text-decoration:underline;">Open Event Overrides</a> to see it.`);
     });
     return;
   }
@@ -1330,8 +1396,17 @@ document.getElementById('ai-send').addEventListener('click', ()=>{
   input.value='';
 });
 document.getElementById('ai-input').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('ai-send').click(); });
-document.getElementById('ai-fab').addEventListener('click', ()=> document.getElementById('ai-panel').classList.add('open'));
-document.getElementById('ai-close').addEventListener('click', ()=> document.getElementById('ai-panel').classList.remove('open'));
+// '/' focuses the active view's in-content search box, if it has one
+document.addEventListener('keydown', e=>{
+  if (e.key==='/' && !['INPUT','TEXTAREA'].includes(document.activeElement?.tagName)){
+    const box = document.querySelector('.view.active [data-search]');
+    if (box){ e.preventDefault(); box.focus(); }
+  }
+});
+function openAiPanel(){ document.getElementById('ai-panel').classList.add('open'); document.documentElement.style.setProperty('--panel-offset','360px'); }
+function closeAiPanel(){ document.getElementById('ai-panel').classList.remove('open'); document.documentElement.style.setProperty('--panel-offset','0px'); }
+document.getElementById('ai-fab').addEventListener('click', openAiPanel);
+document.getElementById('ai-close').addEventListener('click', closeAiPanel);
 document.getElementById('ai-suggestions').innerHTML = AI_SUGGESTIONS.map(s=>`<span class="ai-suggestion-chip" onclick="document.getElementById('ai-input').value='${s.replace(/'/g,"\\'")}'; document.getElementById('ai-send').click();">${s}</span>`).join('');
 
 /* ============================================================
@@ -1339,7 +1414,6 @@ document.getElementById('ai-suggestions').innerHTML = AI_SUGGESTIONS.map(s=>`<sp
    ============================================================ */
 function init(){
   aiSay(`Hi — I can configure providers or answer questions in plain language. Try: "Set BetRadar as default for Tennis" (Journey 6 from the PRD) or one of the suggestions below.`);
-  updateHeaderSearchForView('blending-config');
   populateProviderFilter();
   populateEventFilters();
   renderPresets();
@@ -1353,5 +1427,6 @@ function init(){
   renderProviderFilterChips();
   renderAnalytics();
   renderAuditLog();
+  goToView('blending-config');
 }
 init();
