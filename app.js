@@ -43,6 +43,11 @@ function providerChip(id, opts={}){
   const cls = opts.override ? 'provider-chip override' : (opts.inherited ? 'provider-chip inherited' : 'provider-chip');
   return `<span class="${cls}"><span class="swatch" style="background:${p.color}"></span>${p.name}${opts.suffix?` · ${opts.suffix}`:''}</span>`;
 }
+// Ivory badge for a provider's identity — colour swatch + name.
+function providerBadge(id){
+  const p = providerById(id); if(!p) return '';
+  return `<span class="badge badge-provider"><span class="swatch" style="background:${p.color}"></span>${p.name}</span>`;
+}
 function statusBadge(status){
   return status === 'in-play'
     ? `<span class="badge badge-inplay">In-Play</span>`
@@ -797,8 +802,8 @@ function renderAutomationLog(){
     return `<div class="flex-gap-3" style="padding:10px 14px;border-bottom:1px solid var(--border-muted);align-items:flex-start;">
       <span class="badge ${cls}" style="flex:none;margin-top:2px;">${label}</span>
       <div style="flex:1;">
-        <div style="font-size:12px;">${a.text}</div>
-        <div class="muted" style="font-size:11px;margin-top:2px;">${providerById(a.provider).name} · ${sportName(a.sport)} — ${a.competition} · ${fmtDate(a.ts)} · ${relTime(a.ts)}</div>
+        <div class="flex-gap-2" style="margin-bottom:3px;">${providerBadge(a.provider)}<span style="font-size:12px;">${a.text}</span></div>
+        <div class="muted" style="font-size:11px;">${sportName(a.sport)} — ${a.competition} · ${fmtDate(a.ts)} · ${relTime(a.ts)}</div>
       </div>
     </div>`;
   }).join('') || `<div class="empty-state">No automation events match these filters.</div>`;
@@ -815,7 +820,7 @@ function renderProviderHealth(){
   document.getElementById('provider-health-cards').innerHTML = PROVIDERS.map(p=>{
     const h = PROVIDER_HEALTH[p.id];
     return `<div class="card card-pad">
-      <div class="flex-between"><strong style="font-size:13px;">${p.name}</strong>${healthBadge(h.status)}</div>
+      <div class="flex-between">${providerBadge(p.id)}${healthBadge(h.status)}</div>
       <div class="kpi__value" style="font-size:20px;margin-top:10px;">${h.uptime30d}%</div>
       <div class="kpi__sub">uptime, last 30 days</div>
     </div>`;
@@ -833,8 +838,8 @@ function renderCoverage(){
     const p = providerById(c.provider);
     return `<div style="text-align:center;">
       <div class="gauge">${gaugeSvg(c.pct, p.color)}<div class="gauge__label">${c.pct}%</div></div>
-      <div style="font-size:12px;font-weight:600;margin-top:6px;">${p.name}</div>
-      <div class="muted" style="font-size:11px;">${c.servedEvents}/${c.assignedEvents} events</div>
+      <div style="margin-top:8px;display:flex;justify-content:center;">${providerBadge(p.id)}</div>
+      <div class="muted" style="font-size:11px;margin-top:4px;">${c.servedEvents}/${c.assignedEvents} events</div>
     </div>`;
   }).join('');
   document.getElementById('coverage-gaps-list').innerHTML = COVERAGE_GAPS.map(g=>`
@@ -1308,9 +1313,9 @@ function renderKpiRow(){
 }
 function renderAnTable(){
   document.getElementById('an-table-tbody').innerHTML = Array.from(activeProviderFilter).map(id=>{
-    const p = providerById(id), a = ANALYTICS_SUMMARY[id];
+    const a = ANALYTICS_SUMMARY[id];
     return `<tr>
-      <td><span class="provider-chip"><span class="swatch" style="background:${p.color}"></span>${p.name}</span></td>
+      <td>${providerBadge(id)}</td>
       <td class="num">${fmtMoney(a.revenue)}</td>
       <td class="num">${fmtNum(a.bets)}</td>
       <td class="num">${a.coveragePct}%</td>

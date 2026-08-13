@@ -325,6 +325,9 @@ table{border-collapse:collapse;width:100%;}
 /* Match-type identity badges (replace the blue/red dots) — MCUI parity */
 .badge-preplay{background:var(--gray-solid);color:var(--text-fg-inverted);}
 .badge-inplay{background:var(--green-solid);color:var(--green-contrast);}
+/* Provider identity badge — neutral chip + colour swatch */
+.badge-provider{background:var(--gray-subtle);color:var(--text-fg-title);}
+.badge-provider .swatch{width:7px;height:7px;border-radius:50%;flex:none;}
 
 /* ============================================================
    SHARED PAGE COMPONENTS — one toolbar / table-foot / action-bar
