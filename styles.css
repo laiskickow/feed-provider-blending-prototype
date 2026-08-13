@@ -428,29 +428,29 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
 .preset-row__date{font-size:11px;color:var(--fg-muted);}
 .preset-row .icon-btn{width:26px;height:26px;}
 
-/* Leaf card — the most granular level: Pre-Match + In-Play config together */
+/* Leaf card — market-type defaults under each competition */
 .leaf-card{
   margin:var(--sp-1) var(--sp-3) var(--sp-2);
-  margin-inline-start:calc(2 * var(--tree-indent) + var(--sp-5));
+  margin-inline-start:calc(3 * var(--tree-indent) + var(--sp-5));
   background:var(--bg-subtle);border:1px solid var(--border-subtle);
   border-radius:var(--radii-md);padding:var(--sp-2) var(--sp-3);
 }
 .leaf-card__title{font-size:10px;font-weight:var(--fw-bold);letter-spacing:.4px;text-transform:uppercase;color:var(--fg-muted);margin-bottom:var(--sp-1_5);}
-.leaf-row{display:grid;grid-template-columns:88px 176px 72px 32px 1fr;column-gap:var(--sp-2);align-items:center;padding:var(--sp-1) 0;}
+.leaf-row{display:grid;grid-template-columns:minmax(100px,1fr) 130px 130px 72px 1fr;column-gap:var(--sp-2);align-items:center;padding:var(--sp-1) 0;}
 .leaf-row + .leaf-row{border-top:1px solid var(--border-subtle);}
 .leaf-row .badge{justify-self:start;}
+.leaf-row__label{font-size:11px;font-weight:var(--fw-medium);color:var(--fg-title);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .leaf-row__source{color:var(--fg-muted);font-size:11px;}
 .leaf-row__gth{display:flex;align-items:center;justify-content:center;}
 .leaf-row__state{text-align:right;}
 
-/* Blending tree — 6-column CSS grid, sticky header, depth-indented rows */
+/* Blending tree — 8-column CSS grid, sticky header, depth-indented rows */
 #view-blending-config.active{display:flex;flex-direction:column;height:100%;overflow:hidden;}
 .tree{flex:1;min-height:0;display:flex;flex-direction:column;
-  --tree-cols:minmax(200px,1fr) 176px 96px 96px 32px 80px;
+  --tree-cols:minmax(180px,1fr) 136px 136px 136px 72px 80px 32px 72px;
   --tree-indent:16px;font-size:var(--fs-xs);}
 .tree-scroll{flex:1;min-height:0;overflow:auto;}
-.tree-inner{min-width:736px;}
-/* White MCUI table surface: card wrapper is white, header a light-gray sticky band */
+.tree-inner{min-width:880px;}
 .tree.card{background:var(--bg-panel);overflow:hidden;}
 .tree-head,.tree-row{display:grid;grid-template-columns:var(--tree-cols);
   column-gap:var(--sp-2);align-items:center;padding:var(--sp-1_5) var(--sp-3);}
@@ -458,11 +458,17 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
   border-bottom:var(--bw-sm) solid var(--border);
   font-size:11px;text-transform:uppercase;letter-spacing:.3px;
   font-weight:var(--fw-semibold);color:var(--fg-muted);z-index:1;}
-@media(max-width:1080px){
-  .tree{--tree-cols:minmax(200px,1fr) 176px 96px 32px 80px;}
+@media(max-width:1200px){
+  .tree{--tree-cols:minmax(160px,1fr) 130px 130px 130px 64px 32px 64px;}
   .tree-cell--contains{display:none;}
-  .tree-head [role="columnheader"]:nth-child(4){display:none;}
+  .tree-head [role="columnheader"]:nth-child(6){display:none;}
 }
+/* Global default row — top of the cascade, visually distinct */
+.tree-row--global{background:var(--bg-muted);border-bottom:2px solid var(--border);font-weight:var(--fw-semibold);}
+.tree-row--global .name{font-weight:var(--fw-bold);}
+/* Group rows — subtle visual distinction from sport/competition */
+.tree-row--group .name{font-weight:var(--fw-medium);font-style:normal;}
+.tree-row--group .tree-row__lead .ic{color:var(--fg-muted);}
 
 /* Rich hover tooltip for "not mapped to GTH" warnings, with a fix-it link */
 .map-warning{position:relative;display:inline-flex;align-items:center;cursor:help;flex:none;}

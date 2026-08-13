@@ -233,56 +233,94 @@ document.getElementById('docs-close').addEventListener('click', ()=> document.ge
 
 /* ============================================================
    LEVEL 1 — BLENDING CONFIGURATION (hierarchy tree)
+   Full cascade: Global → Sport → Group → Competition → Market Type
+   Phase (prematch/inplay) resolved independently at every level.
+   Secondary (gap-fill) provider at every level.
    ============================================================ */
-const pendingHierarchy = {}; // key -> providerId|null
-const openTreeNodes = new Set(); // persists expand/collapse state across re-renders
+const pendingHierarchy = {};
+const openTreeNodes = new Set();
 let bcProviderFilter = '';
-// Filtering auto-expands matches; Collapse all sets this so an explicit
-// collapse wins even while a filter is active. A new filter/search clears it.
 let bcSuppressAutoExpand = false;
+
 function sourceLabel(src){
   if (src==='own') return 'Explicit';
+  if (src==='global') return '↑ Global';
   if (src==='sport') return '↑ Sport';
+  if (src==='group') return '↑ Group';
   if (src==='competition') return '↑ Comp';
   return '';
 }
-function visibleTreeModel(){
-  const q = bcSearchQuery.trim().toLowerCase();
-  const pf = bcProviderFilter;
-  return SPORTS.flatMap(sport=>{
-    const sportTextMatches = !q || sport.name.toLowerCase().includes(q);
-    let visibleComps = sport.competitions.filter(c=> sportTextMatches || c.name.toLowerCase().includes(q));
-    if (pf) visibleComps = visibleComps.filter(comp=> compEffectiveProviders(sport, comp).includes(pf));
-    if ((q || pf) && visibleComps.length===0) return [];
-    return [{ sport, visibleComps }];
-  });
+
+// --- Cascade resolver ---------------------------------------------------
+// Walks: Competition → Group → Sport → Global for a given phase.
+// pendingHierarchy keys: `global:${phase}`, `sport:${sportId}:${phase}`,
+//   `group:${groupId}:${phase}`, `comp:${compId}:${phase}`, `secondary:${level}:${id}`
+// Returns { value, source }
+
+function pendingOr(key, committed){ return (key in pendingHierarchy) ? pendingHierarchy[key] : committed; }
+
+function resolveProvider(sportId, compId, phase){
+  const comp = SPORTS.flatMap(s=>s.competitions).find(c=>c.id===compId);
+  const sport = SPORTS.find(s=>s.id===sportId);
+  const group = groupForCompetition(compId);
+  const compVal = pendingOr(`comp:${compId}:${phase}`, comp[phase]);
+  if (compVal) return { value:compVal, source:'own' };
+  if (group){
+    const grpVal = pendingOr(`group:${group.id}:${phase}`, group[phase]);
+    if (grpVal) return { value:grpVal, source:'group' };
+  }
+  const sportVal = pendingOr(`sport:${sportId}:${phase}`, sport[phase]);
+  if (sportVal) return { value:sportVal, source:'sport' };
+  const globalVal = pendingOr(`global:${phase}`, GLOBAL_DEFAULT[phase]);
+  return { value:globalVal, source:'global' };
 }
 
+function resolveSecondary(sportId, compId){
+  const comp = SPORTS.flatMap(s=>s.competitions).find(c=>c.id===compId);
+  const sport = SPORTS.find(s=>s.id===sportId);
+  const group = groupForCompetition(compId);
+  const compVal = pendingOr(`secondary:comp:${compId}`, comp.secondary);
+  if (compVal) return { value:compVal, source:'own' };
+  if (group){
+    const grpVal = pendingOr(`secondary:group:${group.id}`, group.secondary);
+    if (grpVal) return { value:grpVal, source:'group' };
+  }
+  const sportVal = pendingOr(`secondary:sport:${sportId}`, sport.secondary);
+  if (sportVal) return { value:sportVal, source:'sport' };
+  const globalVal = pendingOr(`secondary:global`, GLOBAL_DEFAULT.secondary);
+  return { value:globalVal, source:'global' };
+}
+
+function resolveMarketType(sportId, compId, marketType, phase){
+  const key = `${compId}:${marketType}`;
+  const mtKey = `mt:${key}:${phase}`;
+  const mtVal = pendingOr(mtKey, MARKET_TYPE_DEFAULTS[key]?.[phase] ?? null);
+  if (mtVal) return { value:mtVal, source:'own' };
+  return resolveProvider(sportId, compId, phase);
+}
+
+// Backward-compat wrappers used by effectiveEventProvider and other tabs
 function effectiveMatchTypeProvider(sport, comp, matchType){
-  const key = `${comp.id}:${matchType}`;
-  if (key in pendingHierarchy) return { value:pendingHierarchy[key], source:'pending' };
-  if (MATCHTYPE_DEFAULTS[key]) return { value:MATCHTYPE_DEFAULTS[key], source:'own' };
-  const compKey = `comp:${comp.id}`;
-  const compProvider = (compKey in pendingHierarchy) ? pendingHierarchy[compKey] : comp.defaultProvider;
-  if (compProvider) return { value:compProvider, source:'competition' };
-  const sportKey = `sport:${sport.id}`;
-  const sportProvider = (sportKey in pendingHierarchy) ? pendingHierarchy[sportKey] : sport.defaultProvider;
-  return { value:sportProvider, source:'sport' };
+  return resolveProvider(sport.id, comp.id, matchType);
 }
 function effectiveCompProvider(sport, comp){
-  const compKey = `comp:${comp.id}`;
-  if (compKey in pendingHierarchy) return { value:pendingHierarchy[compKey], source:'pending' };
-  if (comp.defaultProvider) return { value:comp.defaultProvider, source:'own' };
-  const sportKey = `sport:${sport.id}`;
-  const sportProvider = (sportKey in pendingHierarchy) ? pendingHierarchy[sportKey] : sport.defaultProvider;
-  return { value:sportProvider, source:'sport' };
+  return resolveProvider(sport.id, comp.id, 'prematch');
 }
 function compEffectiveProviders(sport, comp){
-  return [ effectiveCompProvider(sport, comp).value, effectiveMatchTypeProvider(sport, comp, 'prematch').value, effectiveMatchTypeProvider(sport, comp, 'inplay').value ];
+  return [
+    resolveProvider(sport.id, comp.id, 'prematch').value,
+    resolveProvider(sport.id, comp.id, 'inplay').value,
+    resolveSecondary(sport.id, comp.id).value
+  ].filter(Boolean);
 }
 
 function providerOptions(selectedId, includeInherit, inheritLabel){
-  let html = includeInherit ? `<option value="">${inheritLabel}</option>` : '';
+  let html = includeInherit ? `<option value="">${inheritLabel||'Inherit'}</option>` : '';
+  PROVIDERS.forEach(p=>{ html += `<option value="${p.id}" ${p.id===selectedId?'selected':''}>${p.name}</option>`; });
+  return html;
+}
+function providerOptionsNullable(selectedId, inheritLabel){
+  let html = `<option value="">${inheritLabel||'None (inherit)'}</option>`;
   PROVIDERS.forEach(p=>{ html += `<option value="${p.id}" ${p.id===selectedId?'selected':''}>${p.name}</option>`; });
   return html;
 }
@@ -292,98 +330,257 @@ function populateProviderFilter(){
   PROVIDERS.forEach(p=> sel.innerHTML += `<option value="${p.id}">${p.name}</option>`);
   sel.addEventListener('change', function(){
     bcProviderFilter = this.value;
-    bcSuppressAutoExpand = false; // a new filter re-expands its matches
+    bcSuppressAutoExpand = false;
     document.getElementById('bc-provider-filter-hint').textContent = bcProviderFilter
       ? 'Showing only nodes where this provider is the effective provider, expanded.' : '';
     renderHierarchyTree();
   });
 }
 
+// --- Visible tree model (filtered) --------------------------------------
+function visibleTreeModel(){
+  const q = bcSearchQuery.trim().toLowerCase();
+  const pf = bcProviderFilter;
+  return SPORTS.flatMap(sport=>{
+    const sportTextMatches = !q || sport.name.toLowerCase().includes(q);
+    const groups = groupsForSport(sport.id);
+    let visibleComps = sport.competitions.filter(c=> sportTextMatches || c.name.toLowerCase().includes(q));
+    if (pf) visibleComps = visibleComps.filter(comp=> compEffectiveProviders(sport, comp).includes(pf));
+    if ((q || pf) && visibleComps.length===0) return [];
+    const visibleGroups = groups.map(g=>({
+      group: g,
+      comps: visibleComps.filter(c=> g.competitions.includes(c.id))
+    })).filter(vg=>vg.comps.length>0);
+    const ungrouped = visibleComps.filter(c=> !groups.some(g=>g.competitions.includes(c.id)));
+    return [{ sport, visibleGroups, ungrouped }];
+  });
+}
+
+// --- Helpers for inherit labels ------------------------------------------
+function inheritLabel(parentVal, prefix){
+  return `Inherit · ${providerById(parentVal)?.name || 'none'}`;
+}
+function parentProviderForGroup(sport, phase){
+  const sportVal = pendingOr(`sport:${sport.id}:${phase}`, sport[phase]);
+  if (sportVal) return sportVal;
+  return pendingOr(`global:${phase}`, GLOBAL_DEFAULT[phase]);
+}
+function parentProviderForComp(sport, group, phase){
+  if (group){
+    const grpVal = pendingOr(`group:${group.id}:${phase}`, group[phase]);
+    if (grpVal) return grpVal;
+  }
+  return parentProviderForGroup(sport, phase);
+}
+function parentSecondaryForGroup(sport){
+  const sportVal = pendingOr(`secondary:sport:${sport.id}`, sport.secondary);
+  if (sportVal) return sportVal;
+  return pendingOr(`secondary:global`, GLOBAL_DEFAULT.secondary);
+}
+function parentSecondaryForComp(sport, group){
+  if (group){
+    const grpVal = pendingOr(`secondary:group:${group.id}`, group.secondary);
+    if (grpVal) return grpVal;
+  }
+  return parentSecondaryForGroup(sport);
+}
+
+// --- Render helpers for a single row's 3 provider selects ----------------
+function treeRowSelects(keys, values, inheritLabels, isPendingArr){
+  return ['prematch','inplay'].map((phase,i)=>`
+    <select class="select input-sm" style="width:100%" data-key="${keys[phase]}">
+      ${providerOptions(values[phase], !!inheritLabels, inheritLabels?.[phase])}
+    </select>`).join('') + `
+    <select class="select input-sm" style="width:100%" data-key="${keys.secondary}">
+      ${providerOptionsNullable(values.secondary, inheritLabels ? `None · ${providerById(inheritLabels.secondary)?.name||'none'}` : 'None')}
+    </select>`;
+}
+
+// --- Render the full hierarchy tree --------------------------------------
 function renderHierarchyTree(){
   const root = document.getElementById('hierarchy-tree');
   const q = bcSearchQuery.trim().toLowerCase();
   const pf = bcProviderFilter;
   const model = visibleTreeModel();
-  // A filter/search auto-expands matches — but never mutates the user's
-  // open set, so Collapse all (which sets the suppress flag) always wins.
   const autoExpand = (!!q || !!pf) && !bcSuppressAutoExpand;
 
-  root.innerHTML = model.map(({sport, visibleComps})=>{
-    const sportKey = `sport:${sport.id}`;
-    const sportVal = (sportKey in pendingHierarchy) ? pendingHierarchy[sportKey] : sport.defaultProvider;
-    const isPending = sportKey in pendingHierarchy;
+  // Global default row
+  const globalPre = pendingOr('global:prematch', GLOBAL_DEFAULT.prematch);
+  const globalInp = pendingOr('global:inplay', GLOBAL_DEFAULT.inplay);
+  const globalSec = pendingOr('secondary:global', GLOBAL_DEFAULT.secondary);
+  const globalPending = ['global:prematch','global:inplay','secondary:global'].some(k=>k in pendingHierarchy);
+  const globalHtml = `
+    <div class="tree-row tree-row--global ${globalPending?'tree-row--pending':''}" style="--depth:1" role="row">
+      <div class="tree-row__lead">
+        ${ic('globe', 16, 'style="color:var(--fg-muted)"')}
+        <span class="name">Global Default</span>
+      </div>
+      <select class="select input-sm" style="width:100%" data-key="global:prematch">
+        ${providerOptions(globalPre, false, '')}
+      </select>
+      <select class="select input-sm" style="width:100%" data-key="global:inplay">
+        ${providerOptions(globalInp, false, '')}
+      </select>
+      <select class="select input-sm" style="width:100%" data-key="secondary:global">
+        ${providerOptionsNullable(globalSec, 'None')}
+      </select>
+      <div class="tree-cell--source"></div>
+      <div class="tree-cell--contains">${SPORTS.length} sport${SPORTS.length===1?'':'s'}</div>
+      <div class="tree-cell--gth"></div>
+      <div class="tree-cell--state">${globalPending?'<span class="badge badge-yellow">unsaved</span>':''}</div>
+    </div>`;
+
+  const sportsHtml = model.map(({sport, visibleGroups, ungrouped})=>{
+    const sportPre = pendingOr(`sport:${sport.id}:prematch`, sport.prematch);
+    const sportInp = pendingOr(`sport:${sport.id}:inplay`, sport.inplay);
+    const sportSec = pendingOr(`secondary:sport:${sport.id}`, sport.secondary);
+    const sportPending = [`sport:${sport.id}:prematch`,`sport:${sport.id}:inplay`,`secondary:sport:${sport.id}`].some(k=>k in pendingHierarchy);
     const sportOpen = openTreeNodes.has('sport-'+sport.id) || autoExpand;
+    const totalComps = visibleGroups.reduce((n,vg)=>n+vg.comps.length, 0) + ungrouped.length;
+
+    const renderComp = (comp, group, depth) => {
+      const effPre = resolveProvider(sport.id, comp.id, 'prematch');
+      const effInp = resolveProvider(sport.id, comp.id, 'inplay');
+      const effSec = resolveSecondary(sport.id, comp.id);
+      const compPre = pendingOr(`comp:${comp.id}:prematch`, comp.prematch);
+      const compInp = pendingOr(`comp:${comp.id}:inplay`, comp.inplay);
+      const compSec = pendingOr(`secondary:comp:${comp.id}`, comp.secondary);
+      const compPending = [`comp:${comp.id}:prematch`,`comp:${comp.id}:inplay`,`secondary:comp:${comp.id}`].some(k=>k in pendingHierarchy);
+      const preMapped = isMapped(effPre.value, comp.id, 'prematch');
+      const inpMapped = isMapped(effInp.value, comp.id, 'inplay');
+      const compOpen = openTreeNodes.has('comp-'+comp.id) || autoExpand;
+      const parentPre = parentProviderForComp(sport, group, 'prematch');
+      const parentInp = parentProviderForComp(sport, group, 'inplay');
+      const parentSec = parentSecondaryForComp(sport, group);
+      const marketTypes = SPORT_MARKET_TYPES[sport.id] || [];
+      const hasMtDefaults = marketTypes.some(mt=> MARKET_TYPE_DEFAULTS[`${comp.id}:${mt}`] || Object.keys(pendingHierarchy).some(k=>k.startsWith(`mt:${comp.id}:${mt}:`)));
+      const bestSource = [effPre.source, effInp.source].includes('own') ? 'Explicit'
+        : [effPre.source, effInp.source].includes('group') ? '↑ Group'
+        : [effPre.source, effInp.source].includes('sport') ? '↑ Sport' : '↑ Global';
+
+      return `
+      <div class="tree-node">
+        <div class="tree-row ${compOpen?'open':''} ${compPending?'tree-row--pending':''}"
+             data-toggle="comp-${comp.id}" style="--depth:${depth}"
+             role="row" aria-level="${depth}" aria-expanded="${compOpen}">
+          <div class="tree-row__lead">
+            ${ICONS.chevron()}${ICONS.competitionIcon()}
+            <span class="name" title="${comp.name}">${comp.name}</span>
+          </div>
+          <select class="select input-sm" style="width:100%" data-key="comp:${comp.id}:prematch">
+            ${providerOptions(compPre, true, inheritLabel(parentPre))}
+          </select>
+          <select class="select input-sm" style="width:100%" data-key="comp:${comp.id}:inplay">
+            ${providerOptions(compInp, true, inheritLabel(parentInp))}
+          </select>
+          <select class="select input-sm" style="width:100%" data-key="secondary:comp:${comp.id}">
+            ${providerOptionsNullable(compSec, `Inherit · ${providerById(parentSec)?.name||'none'}`)}
+          </select>
+          <div class="tree-cell--source">${bestSource}</div>
+          <div class="tree-cell--contains">${comp.events} event${comp.events===1?'':'s'}</div>
+          <div class="tree-cell--gth">${!preMapped?mapWarningHtml(effPre.value, sport.id, comp.id, 'prematch'):(!inpMapped?mapWarningHtml(effInp.value, sport.id, comp.id, 'inplay'):'')}</div>
+          <div class="tree-cell--state">${compPending?'<span class="badge badge-yellow">unsaved</span>':''}</div>
+        </div>
+        <div class="tree-children ${compOpen?'open':''}" id="comp-${comp.id}">
+          <div class="leaf-card" role="group" aria-label="Market-type defaults for ${comp.name}">
+            <div class="leaf-card__title">Market-type defaults</div>
+            ${marketTypes.map(mt=>{
+              const mtKey = `${comp.id}:${mt}`;
+              const mtPre = resolveMarketType(sport.id, comp.id, mt, 'prematch');
+              const mtInp = resolveMarketType(sport.id, comp.id, mt, 'inplay');
+              const mtPreVal = pendingOr(`mt:${mtKey}:prematch`, MARKET_TYPE_DEFAULTS[mtKey]?.prematch ?? '');
+              const mtInpVal = pendingOr(`mt:${mtKey}:inplay`, MARKET_TYPE_DEFAULTS[mtKey]?.inplay ?? '');
+              const mtPending = [`mt:${mtKey}:prematch`,`mt:${mtKey}:inplay`].some(k=>k in pendingHierarchy);
+              return `
+              <div class="leaf-row ${mtPending?'tree-row--pending':''}" role="row">
+                <span class="leaf-row__label" title="${mt}">${mt}</span>
+                <select class="select input-sm" style="width:100%" data-key="mt:${mtKey}:prematch">
+                  ${providerOptions(mtPreVal, true, inheritLabel(effPre.value))}
+                </select>
+                <select class="select input-sm" style="width:100%" data-key="mt:${mtKey}:inplay">
+                  ${providerOptions(mtInpVal, true, inheritLabel(effInp.value))}
+                </select>
+                <span class="leaf-row__source">${mtPre.source==='own'||mtInp.source==='own'?'Explicit':'↑ Comp'}</span>
+                <span class="leaf-row__state">${mtPending?'<span class="badge badge-yellow">unsaved</span>':''}</span>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+      </div>`;
+    };
+
+    const groupsHtml = visibleGroups.map(({group, comps})=>{
+      const grpPre = pendingOr(`group:${group.id}:prematch`, group.prematch);
+      const grpInp = pendingOr(`group:${group.id}:inplay`, group.inplay);
+      const grpSec = pendingOr(`secondary:group:${group.id}`, group.secondary);
+      const grpPending = [`group:${group.id}:prematch`,`group:${group.id}:inplay`,`secondary:group:${group.id}`].some(k=>k in pendingHierarchy);
+      const grpOpen = openTreeNodes.has('group-'+group.id) || autoExpand;
+      const parentPre = parentProviderForGroup(sport, 'prematch');
+      const parentInp = parentProviderForGroup(sport, 'inplay');
+      const parentSec = parentSecondaryForGroup(sport);
+      const effSrc = [grpPre?'own':null, grpInp?'own':null].some(Boolean) ? 'Explicit' : '↑ Sport';
+
+      return `
+      <div class="tree-node">
+        <div class="tree-row tree-row--group ${grpOpen?'open':''} ${grpPending?'tree-row--pending':''}"
+             data-toggle="group-${group.id}" style="--depth:2"
+             role="row" aria-level="2" aria-expanded="${grpOpen}">
+          <div class="tree-row__lead">
+            ${ICONS.chevron()}${ic('layers', 16, 'style="color:var(--fg-muted)"')}
+            <span class="name" title="${group.name}">${group.name}</span>
+          </div>
+          <select class="select input-sm" style="width:100%" data-key="group:${group.id}:prematch">
+            ${providerOptions(grpPre, true, inheritLabel(parentPre))}
+          </select>
+          <select class="select input-sm" style="width:100%" data-key="group:${group.id}:inplay">
+            ${providerOptions(grpInp, true, inheritLabel(parentInp))}
+          </select>
+          <select class="select input-sm" style="width:100%" data-key="secondary:group:${group.id}">
+            ${providerOptionsNullable(grpSec, `Inherit · ${providerById(parentSec)?.name||'none'}`)}
+          </select>
+          <div class="tree-cell--source">${effSrc}</div>
+          <div class="tree-cell--contains">${comps.length} comp${comps.length===1?'':'s'}</div>
+          <div class="tree-cell--gth"></div>
+          <div class="tree-cell--state">${grpPending?'<span class="badge badge-yellow">unsaved</span>':''}</div>
+        </div>
+        <div class="tree-children ${grpOpen?'open':''}" id="group-${group.id}">
+          ${comps.map(c=>renderComp(c, group, 3)).join('')}
+        </div>
+      </div>`;
+    }).join('');
+
+    const ungroupedHtml = ungrouped.map(c=>renderComp(c, null, 2)).join('');
+
     return `
     <div class="tree-node">
-      <div class="tree-row ${sportOpen?'open':''} ${isPending?'tree-row--pending':''}"
+      <div class="tree-row ${sportOpen?'open':''} ${sportPending?'tree-row--pending':''}"
            data-toggle="sport-${sport.id}" style="--depth:1"
            role="row" aria-level="1" aria-expanded="${sportOpen}">
         <div class="tree-row__lead">
           ${ICONS.chevron()}${ICONS.sportIcon()}
           <span class="name" title="${sport.name}">${sport.name}</span>
         </div>
-        <select class="select input-sm" style="width:100%" data-key="${sportKey}">
-          ${providerOptions(sportVal, false, '')}
+        <select class="select input-sm" style="width:100%" data-key="sport:${sport.id}:prematch">
+          ${providerOptions(sportPre, true, inheritLabel(pendingOr('global:prematch', GLOBAL_DEFAULT.prematch)))}
+        </select>
+        <select class="select input-sm" style="width:100%" data-key="sport:${sport.id}:inplay">
+          ${providerOptions(sportInp, true, inheritLabel(pendingOr('global:inplay', GLOBAL_DEFAULT.inplay)))}
+        </select>
+        <select class="select input-sm" style="width:100%" data-key="secondary:sport:${sport.id}">
+          ${providerOptionsNullable(sportSec, `Inherit · ${providerById(pendingOr('secondary:global', GLOBAL_DEFAULT.secondary))?.name||'none'}`)}
         </select>
         <div class="tree-cell--source"></div>
-        <div class="tree-cell--contains">${visibleComps.length} competition${visibleComps.length===1?'':'s'}</div>
+        <div class="tree-cell--contains">${totalComps} comp${totalComps===1?'':'s'}</div>
         <div class="tree-cell--gth"></div>
-        <div class="tree-cell--state">${isPending?'<span class="badge badge-yellow">unsaved</span>':''}</div>
+        <div class="tree-cell--state">${sportPending?'<span class="badge badge-yellow">unsaved</span>':''}</div>
       </div>
       <div class="tree-children ${sportOpen?'open':''}" id="sport-${sport.id}">
-        ${visibleComps.map(comp=>{
-          const compKey = `comp:${comp.id}`;
-          const eff = effectiveCompProvider(sport, comp);
-          const isPendingComp = compKey in pendingHierarchy;
-          const mapped = isMapped(eff.value, comp.id);
-          const compOpen = openTreeNodes.has('comp-'+comp.id) || autoExpand;
-          return `
-          <div class="tree-node">
-            <div class="tree-row ${compOpen?'open':''} ${isPendingComp?'tree-row--pending':''}"
-                 data-toggle="comp-${comp.id}" style="--depth:2"
-                 role="row" aria-level="2" aria-expanded="${compOpen}">
-              <div class="tree-row__lead">
-                ${ICONS.chevron()}${ICONS.competitionIcon()}
-                <span class="name" title="${comp.name}">${comp.name}</span>
-              </div>
-              <select class="select input-sm" style="width:100%" data-key="${compKey}">
-                ${providerOptions(compKey in pendingHierarchy ? pendingHierarchy[compKey] : comp.defaultProvider, true, `Inherit · ${providerById(sportVal)?.name||'—'}`)}
-              </select>
-              <div class="tree-cell--source">${sourceLabel(eff.source)}</div>
-              <div class="tree-cell--contains">${comp.events} event${comp.events===1?'':'s'}</div>
-              <div class="tree-cell--gth">${!mapped?mapWarningHtml(eff.value, sport.id, comp.id, null):''}</div>
-              <div class="tree-cell--state">${isPendingComp?'<span class="badge badge-yellow">unsaved</span>':''}</div>
-            </div>
-            <div class="tree-children ${compOpen?'open':''}" id="comp-${comp.id}">
-              <div class="leaf-card" role="group" aria-label="Match-type defaults for ${comp.name}">
-                <div class="leaf-card__title">Match-type defaults</div>
-                ${['prematch','inplay'].map(mt=>{
-                  const key = `${comp.id}:${mt}`;
-                  const badge = mt==='prematch'
-                    ? '<span class="badge badge-preplay">Pre-Match</span>'
-                    : '<span class="badge badge-inplay">In-Play</span>';
-                  const eff2 = effectiveMatchTypeProvider(sport, comp, mt);
-                  const isPendingMt = key in pendingHierarchy;
-                  const mtMapped = isMapped(eff2.value, comp.id, mt);
-                  return `
-                  <div class="leaf-row ${isPendingMt?'tree-row--pending':''}" role="row" aria-level="3">
-                    ${badge}
-                    <select class="select input-sm" style="width:100%" data-key="${key}">
-                      ${providerOptions(key in pendingHierarchy ? pendingHierarchy[key] : (MATCHTYPE_DEFAULTS[key]||''), true, `Inherit · ${providerById(eff2.value)?.name||'—'}`)}
-                    </select>
-                    <span class="leaf-row__source">${sourceLabel(eff2.source)}</span>
-                    <span class="leaf-row__gth">${!mtMapped?mapWarningHtml(eff2.value, sport.id, comp.id, mt):''}</span>
-                    <span class="leaf-row__state">${isPendingMt?'<span class="badge badge-yellow">unsaved</span>':''}</span>
-                  </div>`;
-                }).join('')}
-              </div>
-            </div>
-          </div>`;
-        }).join('')}
+        ${groupsHtml}${ungroupedHtml}
       </div>
     </div>`;
   }).join('') || `<div class="empty-state" style="padding:var(--sp-4)">No sports or competitions match the current filters.</div>`;
 
+  root.innerHTML = globalHtml + sportsHtml;
   updatePendingBar();
 }
 
@@ -422,25 +619,34 @@ document.getElementById('bc-discard').addEventListener('click', ()=>{
 });
 document.getElementById('bc-expand-all').addEventListener('click', ()=>{
   bcSuppressAutoExpand = false;
-  SPORTS.forEach(s=>{ openTreeNodes.add('sport-'+s.id); s.competitions.forEach(c=>openTreeNodes.add('comp-'+c.id)); });
+  SPORTS.forEach(s=>{
+    openTreeNodes.add('sport-'+s.id);
+    groupsForSport(s.id).forEach(g=>openTreeNodes.add('group-'+g.id));
+    s.competitions.forEach(c=>openTreeNodes.add('comp-'+c.id));
+  });
   renderHierarchyTree();
 });
 document.getElementById('bc-collapse-all').addEventListener('click', ()=>{
   openTreeNodes.clear();
-  bcSuppressAutoExpand = true; // explicit collapse wins even under an active filter
+  bcSuppressAutoExpand = true;
   renderHierarchyTree();
 });
 document.getElementById('bc-export').addEventListener('click', ()=>{
-  const headers = ['Sport','Competition','Match Type','Effective Provider','Source','GTH Mapped'];
+  const headers = ['Sport','Group','Competition','Phase','Primary Provider','Source','Secondary','GTH Mapped'];
   const rows = [];
-  visibleTreeModel().forEach(({sport, visibleComps})=>{
-    visibleComps.forEach(comp=>{
-      ['prematch','inplay'].forEach(mt=>{
-        const eff = effectiveMatchTypeProvider(sport, comp, mt);
-        rows.push([sport.name, comp.name, mt==='prematch'?'Pre-Match':'In-Play',
-          providerById(eff.value)?.name||'(none)', eff.source, isMapped(eff.value, comp.id, mt)?'Yes':'No']);
+  visibleTreeModel().forEach(({sport, visibleGroups, ungrouped})=>{
+    const addComp = (comp, groupName)=>{
+      ['prematch','inplay'].forEach(phase=>{
+        const eff = resolveProvider(sport.id, comp.id, phase);
+        const sec = resolveSecondary(sport.id, comp.id);
+        rows.push([sport.name, groupName, comp.name, phase==='prematch'?'Pre-Match':'In-Play',
+          providerById(eff.value)?.name||'(none)', eff.source,
+          providerById(sec.value)?.name||'(none)',
+          isMapped(eff.value, comp.id, phase)?'Yes':'No']);
       });
-    });
+    };
+    visibleGroups.forEach(({group, comps})=> comps.forEach(c=>addComp(c, group.name)));
+    ungrouped.forEach(c=>addComp(c, '(ungrouped)'));
   });
   const totalRows = SPORTS.reduce((n,s)=> n + s.competitions.length * 2, 0);
   const filtered = rows.length < totalRows;
@@ -452,22 +658,30 @@ document.getElementById('bc-export').addEventListener('click', ()=>{
 });
 
 document.getElementById('bc-save').addEventListener('click', ()=>{
-  // validate every pending change against GTH mapping
   const unmapped = [];
   Object.entries(pendingHierarchy).forEach(([key, providerId])=>{
     if (!providerId) return;
+    if (key.startsWith('global:') || key.startsWith('secondary:')) return;
     if (key.startsWith('sport:')){
-      const sportId = key.split(':')[1];
+      const parts = key.split(':');
+      const sportId = parts[1];
       const sport = SPORTS.find(s=>s.id===sportId);
       sport.competitions.forEach(c=>{ if(!isMapped(providerId, c.id)) unmapped.push({providerId, path:`${providerById(providerId).name} → ${sport.name} → ${c.name}`}); });
+    } else if (key.startsWith('group:')){
+      const parts = key.split(':');
+      const groupId = parts[1];
+      const group = GROUPS.find(g=>g.id===groupId);
+      if (group) group.competitions.forEach(compId=>{
+        if(!isMapped(providerId, compId)) unmapped.push({providerId, path:`${providerById(providerId).name} → ${group.name} → ${competitionName(compId)}`});
+      });
     } else if (key.startsWith('comp:')){
-      const compId = key.split(':')[1];
-      const comp = SPORTS.flatMap(s=>s.competitions).find(c=>c.id===compId);
-      if (!isMapped(providerId, compId)) unmapped.push({providerId, path:`${providerById(providerId).name} → ${comp.name}`});
-    } else {
-      const [compId, mt] = key.split(':');
-      const comp = SPORTS.flatMap(s=>s.competitions).find(c=>c.id===compId);
-      if (!isMapped(providerId, compId, mt)) unmapped.push({providerId, path:`${providerById(providerId).name} → ${comp.name} → ${mt==='prematch'?'Pre-Match':'In-Play'}`});
+      const parts = key.split(':');
+      const compId = parts[1];
+      if (!isMapped(providerId, compId)) unmapped.push({providerId, path:`${providerById(providerId).name} → ${competitionName(compId)}`});
+    } else if (key.startsWith('mt:')){
+      const parts = key.split(':');
+      const compId = parts[1];
+      if (!isMapped(providerId, compId)) unmapped.push({providerId, path:`${providerById(providerId).name} → ${competitionName(compId)} → ${parts[2]}`});
     }
   });
   if (unmapped.length){
@@ -480,21 +694,42 @@ document.getElementById('bc-save').addEventListener('click', ()=>{
   }
   const count = Object.keys(pendingHierarchy).length;
   Object.entries(pendingHierarchy).forEach(([key,val])=>{
-    logAudit('Level 1 — Blending Config', 'Default provider changed', `${key} → ${val?providerById(val).name:'(inherit)'}`);
-    if (key.startsWith('sport:')){
-      SPORTS.find(s=>s.id===key.split(':')[1]).defaultProvider = val;
+    logAudit('Level 1 — Blending Config', 'Provider changed', `${key} → ${val?providerById(val).name:'(inherit)'}`);
+    if (key.startsWith('global:')){
+      const phase = key.split(':')[1];
+      GLOBAL_DEFAULT[phase] = val;
+    } else if (key.startsWith('sport:')){
+      const parts = key.split(':');
+      const sport = SPORTS.find(s=>s.id===parts[1]);
+      sport[parts[2]] = val;
+    } else if (key.startsWith('group:')){
+      const parts = key.split(':');
+      const group = GROUPS.find(g=>g.id===parts[1]);
+      if (group) group[parts[2]] = val;
     } else if (key.startsWith('comp:')){
-      SPORTS.flatMap(s=>s.competitions).find(c=>c.id===key.split(':')[1]).defaultProvider = val;
-    } else if (val){
-      MATCHTYPE_DEFAULTS[key] = val;
-    } else {
-      delete MATCHTYPE_DEFAULTS[key];
+      const parts = key.split(':');
+      const comp = SPORTS.flatMap(s=>s.competitions).find(c=>c.id===parts[1]);
+      comp[parts[2]] = val;
+    } else if (key.startsWith('secondary:')){
+      const rest = key.replace('secondary:','');
+      if (rest === 'global') GLOBAL_DEFAULT.secondary = val;
+      else if (rest.startsWith('sport:')) SPORTS.find(s=>s.id===rest.split(':')[1]).secondary = val;
+      else if (rest.startsWith('group:')){ const g=GROUPS.find(g=>g.id===rest.split(':')[1]); if(g) g.secondary=val; }
+      else if (rest.startsWith('comp:')) SPORTS.flatMap(s=>s.competitions).find(c=>c.id===rest.split(':')[1]).secondary = val;
+    } else if (key.startsWith('mt:')){
+      const parts = key.slice(3).split(':');
+      const compId = parts[0];
+      const marketType = parts.slice(1, -1).join(':');
+      const phase = parts[parts.length-1];
+      const mtKey = `${compId}:${marketType}`;
+      if (!MARKET_TYPE_DEFAULTS[mtKey]) MARKET_TYPE_DEFAULTS[mtKey] = { prematch:null, inplay:null };
+      MARKET_TYPE_DEFAULTS[mtKey][phase] = val;
     }
   });
   Object.keys(pendingHierarchy).forEach(k=>delete pendingHierarchy[k]);
   renderHierarchyTree();
   renderEventsTable();
-  toast('success', 'Configuration saved', `${count} level(s) updated. New events under these nodes will auto-assign to the selected provider.`);
+  toast('success', 'Configuration saved', `${count} level(s) updated.`);
 });
 document.getElementById('validation-goto-mappings').addEventListener('click', ()=>{
   closeOverlay('overlay-validation');
@@ -1508,7 +1743,7 @@ function handleAiInput(raw){
   if (m){
     const sport = findSportByName(m[1].trim());
     if (!sport){ aiSay(`I couldn't match that to an in-scope sport.`); return; }
-    aiSay(`<strong>${sport.name}</strong> default provider: ${providerById(sport.defaultProvider)?.name || 'not set'} (Sport level). Competitions may override this — check the tree in Blending Configuration for specifics.`);
+    aiSay(`<strong>${sport.name}</strong> default: Pre-Match ${providerById(sport.prematch)?.name || 'not set'}, In-Play ${providerById(sport.inplay)?.name || 'not set'} (Sport level). Groups and competitions may override — check the tree in Blending Configuration.`);
     return;
   }
   if (lower.includes('unmapped') && lower.includes('for')){
