@@ -441,30 +441,26 @@ function renderHierarchyTree(){
     const renderComp = (comp, group, depth) => {
       const effPre = resolveProvider(sport.id, comp.id, 'prematch');
       const effInp = resolveProvider(sport.id, comp.id, 'inplay');
-      const effSec = resolveSecondary(sport.id, comp.id);
       const compPre = pendingOr(`comp:${comp.id}:prematch`, comp.prematch);
       const compInp = pendingOr(`comp:${comp.id}:inplay`, comp.inplay);
       const compSec = pendingOr(`secondary:comp:${comp.id}`, comp.secondary);
       const compPending = [`comp:${comp.id}:prematch`,`comp:${comp.id}:inplay`,`secondary:comp:${comp.id}`].some(k=>k in pendingHierarchy);
       const preMapped = isMapped(effPre.value, comp.id, 'prematch');
       const inpMapped = isMapped(effInp.value, comp.id, 'inplay');
-      const compOpen = openTreeNodes.has('comp-'+comp.id) || autoExpand;
       const parentPre = parentProviderForComp(sport, group, 'prematch');
       const parentInp = parentProviderForComp(sport, group, 'inplay');
       const parentSec = parentSecondaryForComp(sport, group);
-      const marketTypes = SPORT_MARKET_TYPES[sport.id] || [];
-      const hasMtDefaults = marketTypes.some(mt=> MARKET_TYPE_DEFAULTS[`${comp.id}:${mt}`] || Object.keys(pendingHierarchy).some(k=>k.startsWith(`mt:${comp.id}:${mt}:`)));
       const bestSource = [effPre.source, effInp.source].includes('own') ? 'Explicit'
         : [effPre.source, effInp.source].includes('group') ? '↑ Group'
         : [effPre.source, effInp.source].includes('sport') ? '↑ Sport' : '↑ Global';
 
       return `
       <div class="tree-node">
-        <div class="tree-row ${compOpen?'open':''} ${compPending?'tree-row--pending':''}"
-             data-toggle="comp-${comp.id}" style="--depth:${depth}"
-             role="row" aria-level="${depth}" aria-expanded="${compOpen}">
+        <div class="tree-row ${compPending?'tree-row--pending':''}"
+             style="--depth:${depth}"
+             role="row" aria-level="${depth}">
           <div class="tree-row__lead">
-            ${ICONS.chevron()}${ICONS.competitionIcon()}
+            <span class="ic ic-16" style="width:12px"></span>${ICONS.competitionIcon()}
             <span class="name" title="${comp.name}">${comp.name}</span>
           </div>
           <select class="select input-sm" style="width:100%" data-key="comp:${comp.id}:prematch">
@@ -480,31 +476,6 @@ function renderHierarchyTree(){
           <div class="tree-cell--contains">${comp.events} event${comp.events===1?'':'s'}</div>
           <div class="tree-cell--gth">${!preMapped?mapWarningHtml(effPre.value, sport.id, comp.id, 'prematch'):(!inpMapped?mapWarningHtml(effInp.value, sport.id, comp.id, 'inplay'):'')}</div>
           <div class="tree-cell--state">${compPending?'<span class="badge badge-yellow">unsaved</span>':''}</div>
-        </div>
-        <div class="tree-children ${compOpen?'open':''}" id="comp-${comp.id}">
-          <div class="leaf-card" role="group" aria-label="Market-type defaults for ${comp.name}">
-            <div class="leaf-card__title">Market-type defaults</div>
-            ${marketTypes.map(mt=>{
-              const mtKey = `${comp.id}:${mt}`;
-              const mtPre = resolveMarketType(sport.id, comp.id, mt, 'prematch');
-              const mtInp = resolveMarketType(sport.id, comp.id, mt, 'inplay');
-              const mtPreVal = pendingOr(`mt:${mtKey}:prematch`, MARKET_TYPE_DEFAULTS[mtKey]?.prematch ?? '');
-              const mtInpVal = pendingOr(`mt:${mtKey}:inplay`, MARKET_TYPE_DEFAULTS[mtKey]?.inplay ?? '');
-              const mtPending = [`mt:${mtKey}:prematch`,`mt:${mtKey}:inplay`].some(k=>k in pendingHierarchy);
-              return `
-              <div class="leaf-row ${mtPending?'tree-row--pending':''}" role="row">
-                <span class="leaf-row__label" title="${mt}">${mt}</span>
-                <select class="select input-sm" style="width:100%" data-key="mt:${mtKey}:prematch">
-                  ${providerOptions(mtPreVal, true, inheritLabel(effPre.value))}
-                </select>
-                <select class="select input-sm" style="width:100%" data-key="mt:${mtKey}:inplay">
-                  ${providerOptions(mtInpVal, true, inheritLabel(effInp.value))}
-                </select>
-                <span class="leaf-row__source">${mtPre.source==='own'||mtInp.source==='own'?'Explicit':'↑ Comp'}</span>
-                <span class="leaf-row__state">${mtPending?'<span class="badge badge-yellow">unsaved</span>':''}</span>
-              </div>`;
-            }).join('')}
-          </div>
         </div>
       </div>`;
     };
@@ -622,7 +593,6 @@ document.getElementById('bc-expand-all').addEventListener('click', ()=>{
   SPORTS.forEach(s=>{
     openTreeNodes.add('sport-'+s.id);
     groupsForSport(s.id).forEach(g=>openTreeNodes.add('group-'+g.id));
-    s.competitions.forEach(c=>openTreeNodes.add('comp-'+c.id));
   });
   renderHierarchyTree();
 });
