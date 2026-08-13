@@ -100,29 +100,26 @@
           <h1>Blending Configuration</h1>
           <p>Default provider per Sport → Competition → Pre-Match/In-Play. Lowest configured level wins; unconfigured levels inherit upward.</p>
         </div>
-        <div class="view-header__actions">
-          <button class="btn btn-tertiary" id="bc-expand-all">Expand all</button>
-          <button class="btn btn-tertiary" id="bc-collapse-all">Collapse all</button>
-          <button class="btn btn-tertiary" id="bc-export">Export CSV</button>
-          <button class="btn btn-primary" id="bc-save" disabled>Save changes</button>
-        </div>
       </div>
 
-      <div class="flex-gap-2" style="margin-bottom:12px;">
-        <select class="select input-sm" id="bc-provider-filter" style="width:260px;">
+      <div class="toolbar">
+        <div class="toolbar__search">
+          <svg class="ic ic-16" aria-hidden="true"><use href="#ic-search"/></svg>
+          <input data-search="blending" placeholder="Search sports or competitions…" aria-label="Search blending hierarchy">
+          <span class="kbd">/</span>
+        </div>
+        <select class="select input-sm" id="bc-provider-filter" style="width:220px;">
           <option value="">Filter by provider — show all</option>
         </select>
         <span class="muted" style="font-size:11px;" id="bc-provider-filter-hint"></span>
-      </div>
-
-      <div id="bc-pending-alert" style="display:none;margin-bottom:12px;">
-        <div class="alert alert-info">
-          <svg class="ic ic-16" aria-hidden="true"><use href="#ic-circle-alert"/></svg>
-          <div><strong>Unsaved changes</strong><span id="bc-pending-count">0</span> level(s) changed. Save to apply — new events created under these nodes will auto-assign to the selected provider.</div>
+        <div class="toolbar__actions">
+          <button class="btn btn-sm btn-tertiary" id="bc-expand-all">Expand all</button>
+          <button class="btn btn-sm btn-tertiary" id="bc-collapse-all">Collapse all</button>
+          <button class="btn btn-sm btn-tertiary" id="bc-export">Export CSV</button>
         </div>
       </div>
 
-      <div class="tree" role="treegrid" aria-label="Provider blending hierarchy">
+      <div class="tree card" role="treegrid" aria-label="Provider blending hierarchy">
         <div class="tree-scroll">
           <div class="tree-inner">
             <div class="tree-head" role="row">
@@ -136,6 +133,14 @@
             <div id="hierarchy-tree"></div>
           </div>
         </div>
+      </div>
+
+      <!-- Save bar — floats only while there are pending changes on this view -->
+      <div class="action-bar" id="bc-action-bar">
+        <span><strong id="bc-pending-count">0</strong> unsaved change(s)</span>
+        <span class="sep"></span>
+        <button class="btn btn-sm btn-tertiary" id="bc-discard">Discard</button>
+        <button class="btn btn-sm btn-primary" id="bc-save">Save changes</button>
       </div>
     </div>
 

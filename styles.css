@@ -268,9 +268,9 @@ table{border-collapse:collapse;width:100%;}
 .view{display:none;padding:var(--sp-3) var(--sp-5) var(--sp-8);}
 .view.active{display:block;}
 
-.view-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:var(--sp-4);gap:var(--sp-4);}
-.view-header h1{font-size:var(--fs-xl);}
-.view-header p{margin:2px 0 0;color:var(--fg-muted);font-size:var(--fs-xs);max-width:640px;}
+.view-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:var(--sp-5);gap:var(--sp-4);}
+.view-header h1{font-size:var(--fs-2xl);line-height:1.2;}
+.view-header p{margin:var(--sp-1_5) 0 0;color:var(--fg-muted);font-size:var(--fs-sm);max-width:720px;line-height:1.5;}
 .view-header__actions{display:flex;gap:var(--sp-2);flex:none;}
 
 .tabs{display:flex;gap:var(--sp-1);border-bottom:1px solid var(--border);margin-bottom:var(--sp-4);}
@@ -416,9 +416,20 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
 .override-select{width:100%;}
 .override-select--active{border-color:var(--border-warning);background:var(--bg-warning);font-weight:var(--fw-semibold);color:var(--fg-title);}
 
-.matchtype-dot{width:7px;height:7px;border-radius:50%;flex:none;display:inline-block;margin-right:2px;}
-.matchtype-dot.prematch{background:var(--blue-solid);}
-.matchtype-dot.inplay{background:var(--red-solid);}
+/* Leaf card — the most granular level: Pre-Match + In-Play config together */
+.leaf-card{
+  margin:var(--sp-1) var(--sp-3) var(--sp-2);
+  margin-inline-start:calc(2 * var(--tree-indent) + var(--sp-5));
+  background:var(--bg-subtle);border:1px solid var(--border-subtle);
+  border-radius:var(--radii-md);padding:var(--sp-2) var(--sp-3);
+}
+.leaf-card__title{font-size:10px;font-weight:var(--fw-bold);letter-spacing:.4px;text-transform:uppercase;color:var(--fg-muted);margin-bottom:var(--sp-1_5);}
+.leaf-row{display:grid;grid-template-columns:88px 176px 72px 32px 1fr;column-gap:var(--sp-2);align-items:center;padding:var(--sp-1) 0;}
+.leaf-row + .leaf-row{border-top:1px solid var(--border-subtle);}
+.leaf-row .badge{justify-self:start;}
+.leaf-row__source{color:var(--fg-muted);font-size:11px;}
+.leaf-row__gth{display:flex;align-items:center;justify-content:center;}
+.leaf-row__state{text-align:right;}
 
 /* Blending tree — 6-column CSS grid, sticky header, depth-indented rows */
 #view-blending-config.active{display:flex;flex-direction:column;height:100%;overflow:hidden;}
@@ -427,10 +438,13 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
   --tree-indent:16px;font-size:var(--fs-xs);}
 .tree-scroll{flex:1;min-height:0;overflow:auto;}
 .tree-inner{min-width:736px;}
+/* White MCUI table surface: card wrapper is white, header a light-gray sticky band */
+.tree.card{background:var(--bg-panel);overflow:hidden;}
 .tree-head,.tree-row{display:grid;grid-template-columns:var(--tree-cols);
-  column-gap:var(--sp-2);align-items:center;padding:var(--sp-1) var(--sp-2);}
-.tree-head{position:sticky;top:0;background:var(--bg-muted);
+  column-gap:var(--sp-2);align-items:center;padding:var(--sp-1_5) var(--sp-3);}
+.tree-head{position:sticky;top:0;background:var(--bg-subtle);
   border-bottom:var(--bw-sm) solid var(--border);
+  font-size:11px;text-transform:uppercase;letter-spacing:.3px;
   font-weight:var(--fw-semibold);color:var(--fg-muted);z-index:1;}
 @media(max-width:1080px){
   .tree{--tree-cols:minmax(200px,1fr) 176px 96px 32px 80px;}
@@ -482,9 +496,9 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
 .suggestion-card__path{font-size:13px;font-weight:var(--fw-semibold);color:var(--fg-title);}
 .suggestion-card__actions{display:flex;gap:6px;flex:none;}
 
-.tree-row{min-height:32px;border-bottom:var(--bw-sm) solid var(--border-muted);cursor:default;scroll-margin-block-start:32px;}
+.tree-row{min-height:34px;border-bottom:var(--bw-sm) solid var(--border-subtle);cursor:default;scroll-margin-block-start:36px;}
 .tree-row[data-toggle]{cursor:pointer;}
-.tree-row:hover{background:var(--bg-muted);}
+.tree-row:hover{background:var(--bg-subtle);}
 /* Pending rows: bg tint + inset left accent (box-shadow so it doesn't shift grid columns) */
 .tree-row--pending{background:var(--bg-warning);box-shadow:inset 3px 0 0 var(--border-warning);}
 /* min-width:0 is load-bearing — grid items default to min-width:auto; ellipsis silently fails without it */

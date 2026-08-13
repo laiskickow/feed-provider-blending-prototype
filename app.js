@@ -173,7 +173,7 @@ function goToView(view){
 document.querySelector('.main').addEventListener('input', e=>{
   const box = e.target.closest('[data-search]');
   if (!box) return;
-  if (box.dataset.search === 'blending'){ bcSearchQuery = box.value; renderHierarchyTree(); }
+  if (box.dataset.search === 'blending'){ bcSearchQuery = box.value; bcSuppressAutoExpand = false; renderHierarchyTree(); }
   else if (box.dataset.search === 'overrides'){ eoSearchQuery = box.value; renderEventsTable(); }
 });
 // WAI-ARIA tablist: click + roving Arrow/Home/End keyboard (auto-activating pattern)
@@ -230,6 +230,9 @@ document.getElementById('docs-close').addEventListener('click', ()=> document.ge
 const pendingHierarchy = {}; // key -> providerId|null
 const openTreeNodes = new Set(); // persists expand/collapse state across re-renders
 let bcProviderFilter = '';
+// Filtering auto-expands matches; Collapse all sets this so an explicit
+// collapse wins even while a filter is active. A new filter/search clears it.
+let bcSuppressAutoExpand = false;
 function sourceLabel(src){
   if (src==='own') return 'Explicit';
   if (src==='sport') return '↑ Sport';
@@ -282,6 +285,7 @@ function populateProviderFilter(){
   PROVIDERS.forEach(p=> sel.innerHTML += `<option value="${p.id}">${p.name}</option>`);
   sel.addEventListener('change', function(){
     bcProviderFilter = this.value;
+    bcSuppressAutoExpand = false; // a new filter re-expands its matches
     document.getElementById('bc-provider-filter-hint').textContent = bcProviderFilter
       ? 'Showing only nodes where this provider is the effective provider, expanded.' : '';
     renderHierarchyTree();
@@ -293,13 +297,15 @@ function renderHierarchyTree(){
   const q = bcSearchQuery.trim().toLowerCase();
   const pf = bcProviderFilter;
   const model = visibleTreeModel();
-  if (q || pf) model.forEach(({sport})=> openTreeNodes.add('sport-'+sport.id));
+  // A filter/search auto-expands matches — but never mutates the user's
+  // open set, so Collapse all (which sets the suppress flag) always wins.
+  const autoExpand = (!!q || !!pf) && !bcSuppressAutoExpand;
 
   root.innerHTML = model.map(({sport, visibleComps})=>{
     const sportKey = `sport:${sport.id}`;
     const sportVal = (sportKey in pendingHierarchy) ? pendingHierarchy[sportKey] : sport.defaultProvider;
     const isPending = sportKey in pendingHierarchy;
-    const sportOpen = openTreeNodes.has('sport-'+sport.id);
+    const sportOpen = openTreeNodes.has('sport-'+sport.id) || autoExpand;
     return `
     <div class="tree-node">
       <div class="tree-row ${sportOpen?'open':''} ${isPending?'tree-row--pending':''}"
@@ -323,7 +329,7 @@ function renderHierarchyTree(){
           const eff = effectiveCompProvider(sport, comp);
           const isPendingComp = compKey in pendingHierarchy;
           const mapped = isMapped(eff.value, comp.id);
-          const compOpen = openTreeNodes.has('comp-'+comp.id) || !!q || !!pf;
+          const compOpen = openTreeNodes.has('comp-'+comp.id) || autoExpand;
           return `
           <div class="tree-node">
             <div class="tree-row ${compOpen?'open':''} ${isPendingComp?'tree-row--pending':''}"
@@ -342,29 +348,28 @@ function renderHierarchyTree(){
               <div class="tree-cell--state">${isPendingComp?'<span class="badge badge-yellow">unsaved</span>':''}</div>
             </div>
             <div class="tree-children ${compOpen?'open':''}" id="comp-${comp.id}">
-              ${['prematch','inplay'].map(mt=>{
-                const key = `${comp.id}:${mt}`;
-                const label = mt==='prematch' ? 'Pre-Match' : 'In-Play';
-                const eff2 = effectiveMatchTypeProvider(sport, comp, mt);
-                const isPendingMt = key in pendingHierarchy;
-                const mtMapped = isMapped(eff2.value, comp.id, mt);
-                return `
-                <div class="tree-row ${isPendingMt?'tree-row--pending':''}"
-                     style="--depth:3" role="row" aria-level="3">
-                  <div class="tree-row__lead">
-                    <span style="width:12px;flex:none"></span>
-                    <span style="width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;flex:none"><span class="matchtype-dot ${mt}"></span></span>
-                    <span class="name">${label}</span>
-                  </div>
-                  <select class="select input-sm" style="width:100%" data-key="${key}">
-                    ${providerOptions(key in pendingHierarchy ? pendingHierarchy[key] : (MATCHTYPE_DEFAULTS[key]||''), true, `Inherit · ${providerById(eff2.value)?.name||'—'}`)}
-                  </select>
-                  <div class="tree-cell--source">${sourceLabel(eff2.source)}</div>
-                  <div class="tree-cell--contains"></div>
-                  <div class="tree-cell--gth">${!mtMapped?mapWarningHtml(eff2.value, sport.id, comp.id, mt):''}</div>
-                  <div class="tree-cell--state">${isPendingMt?'<span class="badge badge-yellow">unsaved</span>':''}</div>
-                </div>`;
-              }).join('')}
+              <div class="leaf-card" role="group" aria-label="Match-type defaults for ${comp.name}">
+                <div class="leaf-card__title">Match-type defaults</div>
+                ${['prematch','inplay'].map(mt=>{
+                  const key = `${comp.id}:${mt}`;
+                  const badge = mt==='prematch'
+                    ? '<span class="badge badge-preplay">Pre-Match</span>'
+                    : '<span class="badge badge-inplay">In-Play</span>';
+                  const eff2 = effectiveMatchTypeProvider(sport, comp, mt);
+                  const isPendingMt = key in pendingHierarchy;
+                  const mtMapped = isMapped(eff2.value, comp.id, mt);
+                  return `
+                  <div class="leaf-row ${isPendingMt?'tree-row--pending':''}" role="row" aria-level="3">
+                    ${badge}
+                    <select class="select input-sm" style="width:100%" data-key="${key}">
+                      ${providerOptions(key in pendingHierarchy ? pendingHierarchy[key] : (MATCHTYPE_DEFAULTS[key]||''), true, `Inherit · ${providerById(eff2.value)?.name||'—'}`)}
+                    </select>
+                    <span class="leaf-row__source">${sourceLabel(eff2.source)}</span>
+                    <span class="leaf-row__gth">${!mtMapped?mapWarningHtml(eff2.value, sport.id, comp.id, mt):''}</span>
+                    <span class="leaf-row__state">${isPendingMt?'<span class="badge badge-yellow">unsaved</span>':''}</span>
+                  </div>`;
+                }).join('')}
+              </div>
             </div>
           </div>`;
         }).join('')}
@@ -401,15 +406,21 @@ function onHierarchyChange(key, value){
 function updatePendingBar(){
   const n = Object.keys(pendingHierarchy).length;
   document.getElementById('bc-save').disabled = n===0;
-  document.getElementById('bc-pending-alert').style.display = n>0 ? 'block' : 'none';
-  document.getElementById('bc-pending-count').textContent = ` ${n}`;
+  document.getElementById('bc-action-bar').classList.toggle('open', n>0);
+  document.getElementById('bc-pending-count').textContent = n;
 }
+document.getElementById('bc-discard').addEventListener('click', ()=>{
+  for (const k in pendingHierarchy) delete pendingHierarchy[k];
+  renderHierarchyTree();
+});
 document.getElementById('bc-expand-all').addEventListener('click', ()=>{
+  bcSuppressAutoExpand = false;
   SPORTS.forEach(s=>{ openTreeNodes.add('sport-'+s.id); s.competitions.forEach(c=>openTreeNodes.add('comp-'+c.id)); });
   renderHierarchyTree();
 });
 document.getElementById('bc-collapse-all').addEventListener('click', ()=>{
   openTreeNodes.clear();
+  bcSuppressAutoExpand = true; // explicit collapse wins even under an active filter
   renderHierarchyTree();
 });
 document.getElementById('bc-export').addEventListener('click', ()=>{
