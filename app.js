@@ -126,14 +126,16 @@ function goToMappingFor(providerId, sportId, competitionId, matchType){
   const rec = GTH_MAPPINGS.find(m=> m.provider === providerId && m.status === 'suggested' && m.level === 'competition' && m.suggestion.competitionId === competitionId);
   goToView('mappings');
   if (rec){
-    document.querySelector('.tab[data-tab="suggested"]').click();
     const state = getTableState('suggested');
     state.text = competitionId ? competitionName(competitionId) : sportName(sportId);
     state.provider = providerId;
+    document.getElementById('sugg-search').value = state.text;
+    document.getElementById('sugg-provider').value = providerId;
     renderSuggestedTab();
+    document.getElementById('mappings-suggestions').scrollIntoView({behavior:'smooth', block:'nearest'});
   } else {
-    document.querySelector('.tab[data-tab="unmapped"]').click();
-    document.querySelector('.tab[data-tab="unmapped-competitions"]').click();
+    document.querySelector('#view-mappings .tab[data-tab="unmapped"]').click();
+    setMappingLevel('unmapped','competition');
     const state = getTableState('unmapped-competitions');
     state.colFilters = state.colFilters || {};
     state.colFilters.providerSport = sportName(sportId);
@@ -1057,7 +1059,10 @@ const COLS_UNMAPPED_MT = [
 
 function renderSuggestedTab(){
   const display = GTH_MAPPINGS.filter(m=>m.status==='suggested').map(mappingDisplayRow);
-  renderFilterBar('filterbar-suggested', 'suggested', renderSuggestedTab, ()=>exportMappingCSV(display,'suggested_maps.csv'));
+  const panel = document.getElementById('mappings-suggestions');
+  if (panel) panel.style.display = display.length ? '' : 'none';
+  const title = document.getElementById('suggestions-title');
+  if (title) title.textContent = `${display.length} suggestion${display.length===1?'':'s'} to review`;
   const state = getTableState('suggested');
   const rows = applyFilterSort(display, state, ['providerSport','providerCompetition','providerMarketType','gthSport','gthCompetition','gthMarketType']);
   document.getElementById('suggested-cards').innerHTML = rows.map(r=>`
@@ -1094,7 +1099,6 @@ function renderActiveCompTab(){
       <span class="icon-btn" style="width:24px;height:24px;" title="History" onclick="showHistory('${r.id}')">${ICONS.history()}</span>
       <span class="icon-btn" style="width:24px;height:24px;" title="Delete" onclick="deleteMapping('${r.id}')">${ICONS.trash()}</span>
     </div>`);
-  document.getElementById('active-comp-export').onclick = ()=>exportMappingCSV(rows,'active_mappings_competitions.csv');
 }
 function renderActiveMtTab(){
   const rows = GTH_MAPPINGS.filter(m=>m.status==='active' && m.level==='marketType').map(mappingDisplayRow);
@@ -1104,7 +1108,6 @@ function renderActiveMtTab(){
       <span class="icon-btn" style="width:24px;height:24px;" title="History" onclick="showHistory('${r.id}')">${ICONS.history()}</span>
       <span class="icon-btn" style="width:24px;height:24px;" title="Delete" onclick="deleteMapping('${r.id}')">${ICONS.trash()}</span>
     </div>`);
-  document.getElementById('active-mt-export').onclick = ()=>exportMappingCSV(rows,'active_mappings_market_types.csv');
 }
 function renderUnmappedCompTab(){
   const rows = GTH_MAPPINGS.filter(m=>(m.status==='unmapped'||m.status==='rejected') && m.level==='competition').map(mappingDisplayRow);
@@ -1113,7 +1116,6 @@ function renderUnmappedCompTab(){
       <button class="btn btn-sm btn-secondary" onclick="openGthSearch('${r.id}')">Map</button>
       ${r.status==='unmapped' ? `<button class="btn btn-sm btn-tertiary" onclick="openReject('${r.id}')">Reject</button>` : ''}
     </div>`);
-  document.getElementById('unmapped-comp-export').onclick = ()=>exportMappingCSV(rows,'unmapped_competitions.csv');
 }
 function renderUnmappedMtTab(){
   const rows = GTH_MAPPINGS.filter(m=>(m.status==='unmapped'||m.status==='rejected') && m.level==='marketType').map(mappingDisplayRow);
@@ -1122,7 +1124,6 @@ function renderUnmappedMtTab(){
       <button class="btn btn-sm btn-secondary" onclick="openGthSearch('${r.id}')">Map</button>
       ${r.status==='unmapped' ? `<button class="btn btn-sm btn-tertiary" onclick="openReject('${r.id}')">Reject</button>` : ''}
     </div>`);
-  document.getElementById('unmapped-mt-export').onclick = ()=>exportMappingCSV(rows,'unmapped_market_types.csv');
 }
 function refreshMappingCounts(){
   const suggestedCount = GTH_MAPPINGS.filter(m=>m.status==='suggested').length;
@@ -1147,6 +1148,35 @@ function refreshAllMappingTabs(){
   renderSuggestedTab(); renderActiveCompTab(); renderActiveMtTab(); renderUnmappedCompTab(); renderUnmappedMtTab();
   refreshMappingCounts();
 }
+
+// Level segmented toggle (Competitions | Market Types) — replaces nested tabs
+function setMappingLevel(scope, level){
+  document.querySelectorAll(`#seg-${scope} .seg__btn`).forEach(b=> b.classList.toggle('active', b.dataset.level===level));
+  document.getElementById(`${scope}-comp-wrap`).style.display = level==='competition' ? '' : 'none';
+  document.getElementById(`${scope}-mt-wrap`).style.display = level==='marketType' ? '' : 'none';
+}
+document.querySelector('.main').addEventListener('click', e=>{
+  const b = e.target.closest('.seg__btn'); if(!b) return;
+  setMappingLevel(b.closest('.seg').id.replace('seg-',''), b.dataset.level);
+});
+function currentLevel(scope){ return document.querySelector(`#seg-${scope} .seg__btn.active`).dataset.level; }
+document.getElementById('active-export').addEventListener('click', ()=>{
+  const lvl = currentLevel('active');
+  const rows = GTH_MAPPINGS.filter(m=>m.status==='active' && m.level===lvl).map(mappingDisplayRow);
+  exportMappingCSV(rows, lvl==='competition' ? 'active_mappings_competitions.csv' : 'active_mappings_market_types.csv');
+});
+document.getElementById('unmapped-export').addEventListener('click', ()=>{
+  const lvl = currentLevel('unmapped');
+  const rows = GTH_MAPPINGS.filter(m=>(m.status==='unmapped'||m.status==='rejected') && m.level===lvl).map(mappingDisplayRow);
+  exportMappingCSV(rows, lvl==='competition' ? 'unmapped_competitions.csv' : 'unmapped_market_types.csv');
+});
+// Suggestions panel filters (provider + free text)
+(function(){
+  const prov = document.getElementById('sugg-provider');
+  PROVIDERS.forEach(p=> prov.innerHTML += `<option value="${p.id}">${p.name}</option>`);
+  prov.addEventListener('change', function(){ getTableState('suggested').provider = this.value; renderSuggestedTab(); });
+  document.getElementById('sugg-search').addEventListener('input', function(){ getTableState('suggested').text = this.value; renderSuggestedTab(); });
+})();
 
 function acceptSuggestion(id){
   const rec = GTH_MAPPINGS.find(m=>m.id===id); if(!rec) return;

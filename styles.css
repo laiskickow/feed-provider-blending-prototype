@@ -489,21 +489,37 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
 .filter-row th{padding:4px 6px;background:var(--bg-panel);}
 .filter-row .input, .filter-row .select{height:24px;font-size:11px;}
 
-/* Suggested Maps — compact review cards (feed info | GTH suggestion | actions) */
+/* Highlighted AI-suggestions panel — sits above the Active table when there
+   are suggestions to review. Accent-highlighted, not a saturated blue box. */
+.suggestions-panel{
+  background:var(--bg-subtle);border:1px solid var(--border);
+  border-left:3px solid var(--border-info);border-radius:var(--radii-md);
+  padding:var(--sp-3);margin-bottom:var(--sp-5);
+}
+.suggestions-panel__head{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);margin-bottom:var(--sp-3);flex-wrap:wrap;}
+
+/* Suggested Maps — full-width review cards (feed | → | GTH suggestion | actions).
+   De-blued: the GTH box is a neutral surface, not an info-blue container. */
 .suggestion-card{
   display:flex;align-items:center;gap:var(--sp-3);background:var(--bg-panel);
   border:1px solid var(--border);border-radius:var(--radii-md);padding:var(--sp-3);margin-bottom:var(--sp-2);
-  flex-wrap:wrap;
 }
-.suggestion-card__feed{flex:1;min-width:200px;}
+.suggestion-card:last-child{margin-bottom:0;}
+.suggestion-card__feed{flex:1;min-width:180px;}
 .suggestion-card__arrow{color:var(--fg-muted);flex:none;}
 .suggestion-card__gth{
-  flex:1;min-width:200px;background:var(--bg-info);border:1px solid var(--border-info);
+  flex:1;min-width:180px;background:var(--bg-muted);border:1px solid var(--border);
   border-radius:var(--radii-sm);padding:var(--sp-2) var(--sp-3);
 }
-.suggestion-card__label{font-size:10px;font-weight:var(--fw-bold);color:var(--blue-fg);letter-spacing:.4px;margin-bottom:2px;}
+.suggestion-card__label{font-size:10px;font-weight:var(--fw-bold);color:var(--fg-muted);letter-spacing:.4px;margin-bottom:2px;}
 .suggestion-card__path{font-size:13px;font-weight:var(--fw-semibold);color:var(--fg-title);}
 .suggestion-card__actions{display:flex;gap:6px;flex:none;}
+
+/* Segmented control — replaces the nested Competitions / Market Types tabs */
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--radii-md);overflow:hidden;background:var(--bg-panel);}
+.seg__btn{border:0;background:transparent;padding:0 var(--sp-3);height:26px;font:var(--fw-semibold) var(--fs-xs)/1 var(--font-body);color:var(--fg-muted);cursor:pointer;}
+.seg__btn + .seg__btn{border-left:1px solid var(--border);}
+.seg__btn.active{background:var(--gray-solid);color:var(--text-fg-inverted);}
 
 .tree-row{min-height:34px;border-bottom:var(--bw-sm) solid var(--border-subtle);cursor:default;scroll-margin-block-start:36px;}
 .tree-row[data-toggle]{cursor:pointer;}
