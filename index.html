@@ -6,7 +6,7 @@
 <title>Feed Provider Blending &amp; Integration Platform</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Murecho:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=13">
+<link rel="stylesheet" href="styles.css?v=14">
 </head>
 <body>
 <!-- ============ SVG SPRITE — Lucide icons, Ivory stroke scale ============ -->
@@ -45,16 +45,6 @@
     <span class="topbar__env">NXT</span>
     <div class="topbar__spacer"></div>
     <div class="topbar__actions">
-      <button type="button" class="icon-btn" id="theme-toggle" aria-label="Toggle light/dark mode">
-        <svg class="ic ic-16" aria-hidden="true"><use href="#ic-moon"/></svg>
-      </button>
-      <button type="button" class="icon-btn" id="notif-btn" aria-label="Unmapped items">
-        <svg class="ic ic-16" aria-hidden="true"><use href="#ic-bell"/></svg>
-        <span class="badge-count" id="unmapped-count">5</span>
-      </button>
-      <button type="button" class="icon-btn" id="docs-btn" aria-label="Documentation">
-        <svg class="ic ic-16" aria-hidden="true"><use href="#ic-book-open"/></svg>
-      </button>
       <button type="button" class="topbar__lang" aria-label="Language">EN</button>
       <div class="topbar__user"><span class="topbar__avatar">LK</span><span>Lais Kickow</span></div>
     </div>
@@ -88,6 +78,19 @@
       aria-selected="false" tabindex="-1">
       <svg class="ic ic-16" aria-hidden="true"><use href="#ic-history"/></svg>Audit Log
     </button>
+    <span class="tabs-spacer"></span>
+    <div class="tabs-actions">
+      <button type="button" class="icon-btn" id="theme-toggle" aria-label="Toggle light/dark mode">
+        <svg class="ic ic-16" aria-hidden="true"><use href="#ic-moon"/></svg>
+      </button>
+      <button type="button" class="icon-btn" id="notif-btn" aria-label="Unmapped items">
+        <svg class="ic ic-16" aria-hidden="true"><use href="#ic-bell"/></svg>
+        <span class="badge-count" id="unmapped-count">5</span>
+      </button>
+      <button type="button" class="icon-btn" id="docs-btn" aria-label="Documentation">
+        <svg class="ic ic-16" aria-hidden="true"><use href="#ic-book-open"/></svg>
+      </button>
+    </div>
   </nav>
 
   <!-- ============ MAIN ============ -->
@@ -609,8 +612,8 @@
   <div class="ai-messages" id="docs-body" style="display:block;"></div>
 </div>
 
-<script src="data.js?v=13"></script>
-<script src="docs.js?v=13"></script>
-<script src="app.js?v=13"></script>
+<script src="data.js?v=14"></script>
+<script src="docs.js?v=14"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>
