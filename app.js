@@ -499,6 +499,7 @@ function renderHierarchyTree(){
           <div class="tree-row__lead">
             ${ICONS.chevron()}${ic('layers', 16, 'style="color:var(--fg-muted)"')}
             <span class="name" title="${group.name}">${group.name}</span>
+            <span class="icon-btn" style="width:20px;height:20px;margin-left:2px;" onclick="event.stopPropagation();openGroupDrawer('${group.id}')" title="Edit group">${ICONS.edit()}</span>
           </div>
           <select class="select input-sm" style="width:100%" data-key="group:${group.id}:prematch">
             ${providerOptions(grpPre, true, inheritLabel(parentPre))}
@@ -547,6 +548,14 @@ function renderHierarchyTree(){
       </div>
       <div class="tree-children ${sportOpen?'open':''}" id="sport-${sport.id}">
         ${groupsHtml}${ungroupedHtml}
+        <div class="tree-row" style="--depth:2;cursor:pointer;color:var(--fg-muted);" onclick="createNewGroup('${sport.id}')">
+          <div class="tree-row__lead">
+            <span class="ic ic-16" style="width:12px"></span>
+            ${ic('plus', 16, 'style="color:var(--fg-muted)"')}
+            <span style="font-size:var(--fs-xs);">New group</span>
+          </div>
+          <div></div><div></div><div></div><div></div><div></div><div></div><div></div>
+        </div>
       </div>
     </div>`;
   }).join('') || `<div class="empty-state" style="padding:var(--sp-4)">No sports or competitions match the current filters.</div>`;
@@ -704,6 +713,112 @@ document.getElementById('bc-save').addEventListener('click', ()=>{
 document.getElementById('validation-goto-mappings').addEventListener('click', ()=>{
   closeOverlay('overlay-validation');
   goToView('mappings');
+});
+
+/* ============================================================
+   GROUP MANAGEMENT — drawer for create / edit / delete groups
+   ============================================================ */
+let editingGroupId = null;
+let editingGroupDraft = null; // { name, sportId, competitions:[] }
+
+function createNewGroup(sportId){
+  const sport = SPORTS.find(s=>s.id===sportId);
+  const existing = groupsForSport(sportId);
+  const letter = String.fromCharCode(65 + existing.length); // A, B, C...
+  const newId = `grp-${sportId}-${Date.now()}`;
+  const newGroup = {
+    id: newId, sportId, name:`Group ${letter} — New`,
+    prematch:null, inplay:null, secondary:null, competitions:[]
+  };
+  GROUPS.push(newGroup);
+  openTreeNodes.add('sport-'+sportId);
+  renderHierarchyTree();
+  openGroupDrawer(newId);
+  logAudit('Level 1 — Blending Config', 'Group created', `${sport.name} → ${newGroup.name}`);
+}
+
+function openGroupDrawer(groupId){
+  const group = GROUPS.find(g=>g.id===groupId);
+  if (!group) return;
+  editingGroupId = groupId;
+  editingGroupDraft = { name:group.name, sportId:group.sportId, competitions:[...group.competitions] };
+  const sport = SPORTS.find(s=>s.id===group.sportId);
+  document.getElementById('group-drawer-title').textContent = 'Edit Group';
+  document.getElementById('group-drawer-subtitle').textContent = sport.name;
+  renderGroupDrawerBody();
+  openDrawer('drawer-group');
+}
+
+function renderGroupDrawerBody(){
+  const g = editingGroupDraft;
+  const sport = SPORTS.find(s=>s.id===g.sportId);
+  const assignedComps = g.competitions.map(cid=> sport.competitions.find(c=>c.id===cid)).filter(Boolean);
+  const allSportComps = sport.competitions;
+  const unassigned = allSportComps.filter(c=>
+    !g.competitions.includes(c.id) &&
+    !GROUPS.some(og=> og.id !== editingGroupId && og.competitions.includes(c.id))
+  );
+
+  document.getElementById('group-drawer-body').innerHTML = `
+    <label class="group-section-label">Group name</label>
+    <input class="input group-name-input" id="group-name-field" value="${g.name}" placeholder="Group name">
+
+    <label class="group-section-label">Competitions (${assignedComps.length})</label>
+    ${assignedComps.length ? assignedComps.map(c=>`
+      <div class="group-member">
+        <span class="group-member__name">${c.name}</span>
+        <span class="group-member__events">${c.events} events</span>
+        <span class="group-member__remove" onclick="removeCompFromGroup('${c.id}')" title="Remove from group">${ICONS.x()}</span>
+      </div>`).join('') : '<div class="group-empty">No competitions assigned yet.</div>'}
+
+    ${unassigned.length ? `
+      <div class="group-add-row">
+        <select class="select input-sm" id="group-add-comp">
+          <option value="">Add a competition…</option>
+          ${unassigned.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}
+        </select>
+        <button class="btn btn-sm btn-tertiary" onclick="addCompToGroup()">Add</button>
+      </div>` : '<div class="group-empty" style="margin-top:var(--sp-2)">All competitions in this sport are assigned to groups.</div>'}
+
+    <div class="alert alert-info" style="margin-top:var(--sp-4)">
+      ${ic('circle-alert', 16)} <div>Groups cascade provider defaults to their competitions. Competitions can still override at their own level. <strong>Q2 open:</strong> seedable from existing groupings — built as new for now.</div>
+    </div>
+  `;
+}
+
+function removeCompFromGroup(compId){
+  editingGroupDraft.competitions = editingGroupDraft.competitions.filter(id=>id!==compId);
+  renderGroupDrawerBody();
+}
+function addCompToGroup(){
+  const sel = document.getElementById('group-add-comp');
+  if (!sel.value) return;
+  editingGroupDraft.competitions.push(sel.value);
+  renderGroupDrawerBody();
+}
+
+document.getElementById('group-save').addEventListener('click', ()=>{
+  const group = GROUPS.find(g=>g.id===editingGroupId);
+  if (!group) return;
+  const nameField = document.getElementById('group-name-field');
+  const oldName = group.name;
+  group.name = nameField.value.trim() || oldName;
+  group.competitions = [...editingGroupDraft.competitions];
+  closeDrawer('drawer-group');
+  renderHierarchyTree();
+  logAudit('Level 1 — Blending Config', 'Group updated', `${group.name}: ${group.competitions.length} competition(s)`);
+  toast('success', 'Group saved', `${group.name} updated.`);
+});
+
+document.getElementById('group-delete').addEventListener('click', ()=>{
+  const group = GROUPS.find(g=>g.id===editingGroupId);
+  if (!group) return;
+  const idx = GROUPS.indexOf(group);
+  if (idx >= 0) GROUPS.splice(idx, 1);
+  closeDrawer('drawer-group');
+  renderHierarchyTree();
+  logAudit('Level 1 — Blending Config', 'Group deleted', `${group.name} removed — competitions now inherit from sport`);
+  toast('success', 'Group deleted', `${group.name} removed. Its competitions now inherit directly from ${sportName(group.sportId)}.`);
 });
 
 /* ============================================================

@@ -6,7 +6,7 @@
 <title>Feed Provider Blending &amp; Integration Platform</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Murecho:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=12">
+<link rel="stylesheet" href="styles.css?v=13">
 </head>
 <body>
 <!-- ============ SVG SPRITE — Lucide icons, Ivory stroke scale ============ -->
@@ -553,6 +553,19 @@
 </div>
 
 <!-- Event override drawer -->
+<div class="drawer" id="drawer-group">
+  <div class="modal__header">
+    <div><h3 id="group-drawer-title">Edit Group</h3><p id="group-drawer-subtitle"></p></div>
+    <span class="close-x" data-close-drawer="drawer-group"><svg class="ic ic-20" aria-hidden="true"><use href="#ic-x"/></svg></span>
+  </div>
+  <div class="modal__body" id="group-drawer-body"></div>
+  <div class="modal__footer">
+    <button class="btn btn-sm btn-tertiary" id="group-delete" style="margin-right:auto;">Delete group</button>
+    <button class="btn btn-sm btn-tertiary" data-close-drawer="drawer-group">Cancel</button>
+    <button class="btn btn-sm btn-primary" id="group-save">Save group</button>
+  </div>
+</div>
+
 <div class="drawer" id="drawer-override">
   <div class="modal__header">
     <div><h3 id="override-drawer-title">Override provider</h3><p id="override-drawer-subtitle"></p></div>
@@ -596,8 +609,8 @@
   <div class="ai-messages" id="docs-body" style="display:block;"></div>
 </div>
 
-<script src="data.js?v=12"></script>
-<script src="docs.js?v=12"></script>
-<script src="app.js?v=12"></script>
+<script src="data.js?v=13"></script>
+<script src="docs.js?v=13"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>
