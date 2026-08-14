@@ -110,13 +110,13 @@ const GROUPS = [
 function groupForCompetition(compId){ return GROUPS.find(g=>g.competitions.includes(compId))||null; }
 function groupsForSport(sportId){ return GROUPS.filter(g=>g.sportId===sportId); }
 
-// ---- Market-type defaults (per competition, per market type) ------------
-// key: `${competitionId}:${marketTypeName}` → { prematch, inplay }
-// null = inherit from competition level
+// ---- Market-type defaults (per node, per market type) -------------------
+// key: `${level}:${nodeId}:${marketTypeName}` (level ∈ sport|group|comp)
+//   → { prematch, inplay }.  null = inherit from that node's level.
 const MARKET_TYPE_DEFAULTS = {
-  'eb-euroleague:Match Winner':  { prematch:'betradar', inplay:'betgenious' },
-  'eb-euroleague:Total Points Over/Under': { prematch:null, inplay:'betgenious' },
-  'cr-ipl:Match Winner':         { prematch:null, inplay:'betradar' },
+  'comp:eb-euroleague:Match Winner':  { prematch:'betradar', inplay:'betgenious' },
+  'comp:eb-euroleague:Total Points Over/Under': { prematch:null, inplay:'betgenious' },
+  'comp:cr-ipl:Match Winner':         { prematch:null, inplay:'betradar' },
 };
 
 // ---- GTH mapping status per (provider, sport/competition) ------------

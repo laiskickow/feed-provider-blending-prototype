@@ -387,6 +387,37 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
 .input-sm{height:26px;}
 .input-error{border-color:var(--border-error);background:var(--bg-error);}
 
+/* Multi-select smart dropdown — chips + searchable popover. Shared by the
+   Create-Override modal (targets) and the Blending filter. */
+.ms{position:relative;width:100%;}
+.ms-control{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-1);min-height:30px;
+  border:1px solid var(--border);border-radius:var(--radii-md);background:var(--bg-panel);
+  padding:3px var(--sp-1_5);cursor:text;}
+.ms-control:focus-within{border-color:var(--border-focus);box-shadow:0 0 0 1px var(--border-focus);}
+.ms.open .ms-control{border-color:var(--border-focus);}
+.ms-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;line-height:1;
+  background:var(--bg-muted);border:1px solid var(--border);border-radius:var(--radii-sm);
+  padding:3px 4px 3px 7px;color:var(--fg-title);max-width:180px;}
+.ms-chip__label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ms-chip__x{display:inline-flex;cursor:pointer;color:var(--fg-muted);border-radius:var(--radii-sm);}
+.ms-chip__x:hover{color:var(--fg);background:var(--bg-emphasized);}
+.ms-input{flex:1;min-width:60px;border:none;outline:none;background:none;font-family:inherit;
+  font-size:var(--fs-xs);color:var(--fg);height:22px;}
+.ms-input::placeholder{color:var(--fg-subtle);}
+.ms-popover{position:absolute;z-index:40;top:calc(100% + 3px);left:0;right:0;
+  background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radii-md);
+  box-shadow:var(--shadow-float);max-height:260px;overflow-y:auto;padding:var(--sp-1);}
+.ms-group-head{font-size:10px;font-weight:var(--fw-bold);letter-spacing:.4px;text-transform:uppercase;
+  color:var(--fg-muted);padding:var(--sp-1_5) var(--sp-2) var(--sp-1);}
+.ms-option{display:flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-xs);color:var(--fg);
+  padding:var(--sp-1_5) var(--sp-2);border-radius:var(--radii-sm);cursor:pointer;}
+.ms-option:hover,.ms-option.active{background:var(--bg-muted);}
+.ms-option__box{width:14px;height:14px;flex:none;border:1px solid var(--border-muted);border-radius:3px;
+  display:inline-flex;align-items:center;justify-content:center;color:#fff;}
+.ms-option.selected .ms-option__box{background:var(--blue-solid);border-color:var(--blue-solid);}
+.ms-option.selected .ms-option__box svg{width:10px;height:10px;}
+.ms-empty{padding:var(--sp-2) var(--sp-2);font-size:11px;color:var(--fg-muted);}
+
 .card{background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radii-md);}
 .card-pad{padding:var(--sp-4);}
 .card-highlight{background:var(--bg-subtle);border-left:3px solid var(--border-info);}
@@ -416,6 +447,9 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
 .data-table tbody tr.row-override td:first-child{border-left:2px solid var(--border-warning);}
 .data-table .mono{font-family:'SF Mono',Consolas,monospace;font-size:11px;color:var(--fg-muted);}
 .data-table .num{text-align:right;font-variant-numeric:tabular-nums;}
+.data-table tr.ov-parent:hover{background:var(--bg-muted);}
+.data-table tr.ov-child td{background:var(--bg-subtle);}
+.data-table tr.ov-child:hover td{background:var(--bg-muted);}
 .data-table thead th.sortable{cursor:pointer;user-select:none;}
 .data-table thead th.sortable:hover{color:var(--fg-title);}
 

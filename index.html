@@ -6,7 +6,7 @@
 <title>Feed Provider Blending &amp; Integration Platform</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Murecho:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=17">
+<link rel="stylesheet" href="styles.css?v=18">
 </head>
 <body>
 <!-- ============ SVG SPRITE — Lucide icons, Ivory stroke scale ============ -->
@@ -72,7 +72,7 @@
     <button type="button" class="ivory-tab" role="tab" id="navtab-monitoring"
       data-view="monitoring" aria-controls="view-monitoring"
       aria-selected="false" tabindex="-1">
-      <svg class="ic ic-16" aria-hidden="true"><use href="#ic-activity"/></svg>Monitoring
+      <svg class="ic ic-16" aria-hidden="true"><use href="#ic-activity"/></svg>Analytics
     </button>
     <button type="button" class="ivory-tab" role="tab" id="navtab-audit-log"
       data-view="audit-log" aria-controls="view-audit-log"
@@ -104,16 +104,12 @@
       <div class="view-header">
         <div>
           <h1>Blending Configuration</h1>
-          <p>Provider cascade: Global → Sport → Group → Competition. Each level sets Primary (Pre-Match + In-Play) and Secondary. Most specific wins; unconfigured levels inherit upward. Per-market overrides live in Event Overrides.</p>
+          <p>Provider cascade: Sport → Group → Competition. Each level sets Primary (Pre-Match + In-Play) and Secondary, and can add per-market overrides. Most specific wins; unconfigured levels inherit upward.</p>
         </div>
       </div>
 
       <div class="toolbar">
-        <div class="toolbar__search">
-          <svg class="ic ic-16" aria-hidden="true"><use href="#ic-search"/></svg>
-          <input data-search="blending" placeholder="Search sports or competitions…" aria-label="Search blending hierarchy">
-          <span class="kbd">/</span>
-        </div>
+        <div id="bc-filter" style="flex:1;min-width:280px;max-width:520px;"></div>
         <select class="select input-sm" id="bc-provider-filter" style="width:220px;">
           <option value="">Filter by provider — show all</option>
         </select>
@@ -169,6 +165,10 @@
         </div>
       </div>
 
+      <!-- Provider status — suspend a feed or set a fallback (moved from Monitoring) -->
+      <div style="font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--fg-muted);margin-bottom:var(--sp-2);">Provider status</div>
+      <div id="eo-provider-status" style="margin-bottom:var(--sp-4);"></div>
+
       <div class="toolbar" id="eo-toolbar" style="display:none;">
         <div class="toolbar__search">
           <svg class="ic ic-16" aria-hidden="true"><use href="#ic-search"/></svg>
@@ -209,39 +209,12 @@
     <div class="view" id="view-monitoring" role="tabpanel" aria-labelledby="navtab-monitoring" tabindex="0" aria-hidden="true">
       <div class="view-header">
         <div>
-          <h1>Monitoring</h1>
-          <p>System-driven blending activity, provider health and coverage, plus performance &amp; billing analytics — read-only.</p>
+          <h1>Analytics</h1>
+          <p>Provider performance &amp; billing — revenue, volume, coverage, uptime and margin. Read-only.</p>
         </div>
       </div>
 
-      <div class="tabs">
-        <div class="tab active" data-tab="log">Automation Log</div>
-        <div class="tab" data-tab="health">Provider Health</div>
-        <div class="tab" data-tab="analytics">Analytics</div>
-      </div>
-
-      <div class="tab-panel active" id="tab-log">
-        <div class="card card-pad flex-gap-2" style="margin-bottom:12px;flex-wrap:wrap;">
-          <select class="select input-sm" id="log-filter-provider" style="width:160px;"><option value="">All providers</option></select>
-          <select class="select input-sm" id="log-filter-type" style="width:170px;">
-            <option value="">All action types</option>
-            <option value="outage">Outage triggered</option>
-            <option value="fallback">Fallback activated</option>
-            <option value="recovered">Provider recovered</option>
-            <option value="degraded">Degraded</option>
-            <option value="gap-fill">Gap coverage</option>
-          </select>
-          <input class="input input-sm" id="log-filter-text" placeholder="Search sport, competition, description…" style="width:260px;">
-          <button class="btn btn-sm btn-tertiary" id="log-export" style="margin-left:auto;">Export CSV</button>
-        </div>
-        <div class="card" id="automation-log-list"></div>
-      </div>
-
-      <div class="tab-panel" id="tab-health">
-        <div class="grid-2" id="provider-dashboard-cards"></div>
-      </div>
-
-      <div class="tab-panel" id="tab-analytics">
+      <div id="tab-analytics">
         <div class="toolbar">
           <div class="flex-gap-2" id="an-provider-filter" style="flex-wrap:wrap;"></div>
           <div class="toolbar__actions">
@@ -274,7 +247,7 @@
 
         <div class="card" style="overflow:auto;">
           <table class="data-table">
-            <thead><tr><th>Provider</th><th>Revenue</th><th>Bets</th><th>Coverage %</th><th>Uptime %</th><th>Avg. latency</th><th>Margin %</th></tr></thead>
+            <thead><tr><th>Provider</th><th>Status</th><th>Revenue</th><th>Bets</th><th>Coverage %</th><th>Uptime %</th><th>Avg. latency</th><th>Margin %</th></tr></thead>
             <tbody id="an-table-tbody"></tbody>
           </table>
         </div>
@@ -360,34 +333,68 @@
       <div class="view-header">
         <div>
           <h1>Audit Log</h1>
-          <p>Every configuration change across the platform — user, timestamp, before/after. Added as a companion screen to the audit-trail requirement in the PRD's non-functional section, which didn't specify a dedicated view.</p>
+          <p>Every change on the platform — trader configuration edits and system-driven automation, in one place.</p>
         </div>
       </div>
 
-      <div class="toolbar">
-        <div class="toolbar__search">
-          <svg class="ic ic-16" aria-hidden="true"><use href="#ic-search"/></svg>
-          <input id="al-filter-user" placeholder="Filter by user…" aria-label="Filter by user">
+      <div class="tabs">
+        <div class="tab active" data-tab="trader">Trader log</div>
+        <div class="tab" data-tab="system">System log</div>
+      </div>
+
+      <!-- TRADER LOG — user configuration changes -->
+      <div class="tab-panel active" id="tab-trader">
+        <div class="toolbar">
+          <div class="toolbar__search">
+            <svg class="ic ic-16" aria-hidden="true"><use href="#ic-search"/></svg>
+            <input id="al-filter-user" placeholder="Filter by user…" aria-label="Filter by user">
+          </div>
+          <select class="select input-sm" id="al-filter-area" style="width:220px;">
+            <option value="">All areas</option>
+            <option>Level 1 — Blending Config</option>
+            <option>Level 2 — Event Overrides</option>
+            <option>Provider Mappings</option>
+          </select>
+          <div class="toolbar__actions">
+            <button class="btn btn-sm btn-tertiary" id="al-export">Export CSV</button>
+          </div>
         </div>
-        <select class="select input-sm" id="al-filter-area" style="width:220px;">
-          <option value="">All areas</option>
-          <option>Level 1 — Blending Config</option>
-          <option>Level 2 — Event Overrides</option>
-          <option>Provider Mappings</option>
-        </select>
-        <div class="toolbar__actions">
-          <button class="btn btn-sm btn-tertiary" id="al-export">Export CSV</button>
+        <div class="card">
+          <div style="overflow:auto;max-height:560px;">
+            <table class="data-table">
+              <thead><tr><th>Timestamp</th><th>User</th><th>Area</th><th>Action</th><th>Detail</th></tr></thead>
+              <tbody id="audit-tbody"></tbody>
+            </table>
+          </div>
+          <div class="tbl-foot"><span><strong id="al-count">0</strong> entries</span></div>
         </div>
       </div>
 
-      <div class="card">
-        <div style="overflow:auto;max-height:620px;">
-          <table class="data-table">
-            <thead><tr><th>Timestamp</th><th>User</th><th>Area</th><th>Action</th><th>Detail</th></tr></thead>
-            <tbody id="audit-tbody"></tbody>
-          </table>
+      <!-- SYSTEM LOG — automated blending actions (outage fallback, recovery, gap coverage) -->
+      <div class="tab-panel" id="tab-system">
+        <div class="toolbar">
+          <select class="select input-sm" id="log-filter-provider" style="width:160px;"><option value="">All providers</option></select>
+          <select class="select input-sm" id="log-filter-type" style="width:170px;">
+            <option value="">All action types</option>
+            <option value="outage">Outage triggered</option>
+            <option value="fallback">Fallback activated</option>
+            <option value="recovered">Provider recovered</option>
+            <option value="degraded">Degraded</option>
+            <option value="gap-fill">Gap coverage</option>
+          </select>
+          <input class="input input-sm" id="log-filter-text" placeholder="Search sport, competition, description…" style="width:260px;">
+          <div class="toolbar__actions">
+            <button class="btn btn-sm btn-tertiary" id="log-export">Export CSV</button>
+          </div>
         </div>
-        <div class="tbl-foot"><span><strong id="al-count">0</strong> entries</span></div>
+        <div class="card">
+          <div style="overflow:auto;max-height:560px;">
+            <table class="data-table">
+              <thead><tr><th>Timestamp</th><th>Type</th><th>Provider</th><th>Sport · Competition</th><th>Description</th></tr></thead>
+              <tbody id="automation-log-list"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -620,8 +627,8 @@
   <div class="ai-messages" id="docs-body" style="display:block;"></div>
 </div>
 
-<script src="data.js?v=17"></script>
-<script src="docs.js?v=17"></script>
-<script src="app.js?v=17"></script>
+<script src="data.js?v=18"></script>
+<script src="docs.js?v=18"></script>
+<script src="app.js?v=18"></script>
 </body>
 </html>
