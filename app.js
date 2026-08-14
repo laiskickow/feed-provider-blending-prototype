@@ -458,13 +458,44 @@ function renderHierarchyTree(){
         : [effPre.source, effInp.source].includes('group') ? '↑ Group'
         : [effPre.source, effInp.source].includes('sport') ? '↑ Sport' : '↑ Global';
 
+      const compOpen = openTreeNodes.has('comp-'+comp.id) || autoExpand;
+      const marketTypes = SPORT_MARKET_TYPES[sport.id] || [];
+      const marketRowsHtml = marketTypes.map(mt=>{
+        const mtKey = `${comp.id}:${mt}`;
+        const mtPre = pendingOr(`mt:${mtKey}:prematch`, MARKET_TYPE_DEFAULTS[mtKey]?.prematch ?? null);
+        const mtInp = pendingOr(`mt:${mtKey}:inplay`, MARKET_TYPE_DEFAULTS[mtKey]?.inplay ?? null);
+        const mtPending = [`mt:${mtKey}:prematch`,`mt:${mtKey}:inplay`].some(k=>k in pendingHierarchy);
+        return `
+          <div class="tree-row tree-row--market ${mtPending?'tree-row--pending':''}" style="--depth:${depth+1}" role="row" aria-level="${depth+1}">
+            <div class="tree-row__lead">
+              <span class="ic ic-16" style="width:12px"></span>
+              <span class="ic ic-16" style="width:12px"></span>
+              <span class="name">${mt}</span>
+            </div>
+            <select class="select input-sm" style="width:100%" data-key="mt:${mtKey}:prematch">
+              ${providerOptions(mtPre, true, inheritLabel(compPre || parentPre))}
+            </select>
+            <select class="select input-sm" style="width:100%" data-key="mt:${mtKey}:inplay">
+              ${providerOptions(mtInp, true, inheritLabel(compInp || parentInp))}
+            </select>
+            <div></div>
+            <div class="tree-cell--source">${mtPre||mtInp?'Explicit':'↑ Comp'}</div>
+            <div class="tree-cell--contains"></div>
+            <div class="tree-cell--gth"></div>
+            <div class="tree-cell--state">
+              ${mtPending?'<span class="badge badge-yellow">unsaved</span>':''}
+              <button class="icon-btn" style="width:18px;height:18px;" onclick="event.stopPropagation();openBulkMarketApply('${sport.id}','${mt}','${comp.id}')" title="Apply to other competitions">${ic('copy',12)}</button>
+            </div>
+          </div>`;
+      }).join('');
+
       return `
       <div class="tree-node">
-        <div class="tree-row ${compPending?'tree-row--pending':''}"
-             style="--depth:${depth}"
-             role="row" aria-level="${depth}">
+        <div class="tree-row ${compOpen&&marketTypes.length?'open':''} ${compPending?'tree-row--pending':''}"
+             ${marketTypes.length?`data-toggle="comp-${comp.id}"`:''} style="--depth:${depth}"
+             role="row" aria-level="${depth}" ${marketTypes.length?`aria-expanded="${compOpen}"`:''}>
           <div class="tree-row__lead">
-            <span class="ic ic-16" style="width:12px"></span>${ICONS.competitionIcon()}
+            ${marketTypes.length?ICONS.chevron():'<span class="ic ic-16" style="width:12px"></span>'}${ICONS.competitionIcon()}
             <span class="name" title="${comp.name}">${comp.name}</span>
           </div>
           <select class="select input-sm" style="width:100%" data-key="comp:${comp.id}:prematch">
@@ -481,6 +512,7 @@ function renderHierarchyTree(){
           <div class="tree-cell--gth">${!preMapped?mapWarningHtml(effPre.value, sport.id, comp.id, 'prematch'):(!inpMapped?mapWarningHtml(effInp.value, sport.id, comp.id, 'inplay'):'')}</div>
           <div class="tree-cell--state">${compPending?'<span class="badge badge-yellow">unsaved</span>':''}</div>
         </div>
+        ${marketTypes.length ? `<div class="tree-children ${compOpen?'open':''}" id="comp-${comp.id}">${marketRowsHtml}</div>` : ''}
       </div>`;
     };
 
@@ -586,6 +618,45 @@ function renderHierarchyTree(){
     if (sel) onHierarchyChange(sel.dataset.key, sel.value);
   });
 })();
+
+function openBulkMarketApply(sportId, marketType, sourceCompId){
+  const sport = SPORTS.find(s=>s.id===sportId);
+  if (!sport) return;
+  const sourceKey = `${sourceCompId}:${marketType}`;
+  const srcPre = pendingOr(`mt:${sourceKey}:prematch`, MARKET_TYPE_DEFAULTS[sourceKey]?.prematch ?? null);
+  const srcInp = pendingOr(`mt:${sourceKey}:inplay`, MARKET_TYPE_DEFAULTS[sourceKey]?.inplay ?? null);
+  const srcComp = sport.competitions.find(c=>c.id===sourceCompId);
+  const others = sport.competitions.filter(c=>c.id!==sourceCompId);
+
+  document.getElementById('confirm-title').textContent = 'Bulk Apply Market Settings';
+  document.getElementById('confirm-subtitle').textContent = `${marketType} — from ${srcComp?.name||sourceCompId}`;
+  document.getElementById('confirm-body').innerHTML = `
+    <p style="margin-bottom:var(--sp-2);">Apply <strong>${marketType}</strong> provider settings to other competitions in ${sport.name}:</p>
+    <div style="margin-bottom:var(--sp-2);font-size:var(--fs-xs);color:var(--fg-muted);">
+      Pre-Match: ${srcPre?providerById(srcPre)?.name:'Inherit'} · In-Play: ${srcInp?providerById(srcInp)?.name:'Inherit'}
+    </div>
+    <div style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radii-md);">
+      ${others.map(c=>`<label style="display:flex;gap:var(--sp-2);padding:var(--sp-2) var(--sp-3);border-bottom:1px solid var(--border-subtle);font-size:var(--fs-xs);cursor:pointer;">
+        <input type="checkbox" class="bulk-mt-check" value="${c.id}" checked> ${c.name}
+      </label>`).join('')}
+    </div>`;
+  const okBtn = document.getElementById('confirm-ok');
+  okBtn.textContent = 'Apply';
+  okBtn.className = 'btn btn-primary';
+  okBtn.onclick = ()=>{
+    const checked = [...document.querySelectorAll('.bulk-mt-check:checked')].map(cb=>cb.value);
+    checked.forEach(compId=>{
+      const key = `${compId}:${marketType}`;
+      if (srcPre !== null) pendingHierarchy[`mt:${key}:prematch`] = srcPre;
+      if (srcInp !== null) pendingHierarchy[`mt:${key}:inplay`] = srcInp;
+      if (!MARKET_TYPE_DEFAULTS[key]) MARKET_TYPE_DEFAULTS[key] = {};
+    });
+    closeOverlay('overlay-confirm');
+    renderHierarchyTree();
+    toast('success','Market settings applied',`${marketType} → ${checked.length} competition${checked.length!==1?'s':''}`);
+  };
+  openOverlay('overlay-confirm');
+}
 
 function onHierarchyChange(key, value){
   pendingHierarchy[key] = value || null;
@@ -951,30 +1022,29 @@ function renderOverridesList(){
   toolbar.style.display = '';
   empty.style.display = 'none';
 
-  list.innerHTML = overrides.map(ov=>{
-    const affected = computeAffectedEvents(ov).length;
-    const mtLabel = ov.matchType === 'prematch' ? 'Pre-Match' : 'In-Play';
-    return `
-    <div class="override-card override-card--${ov.scope}">
-      <div class="override-card__body">
-        <div class="override-card__head">
-          <span class="badge-scope badge-scope--${ov.scope}">${ov.scope}</span>
-          ${ov.matchType === 'prematch' ? '<span class="badge badge-preplay">Pre-Match</span>' : '<span class="badge badge-inplay">In-Play</span>'}
-          ${expiryBadge(ov)}
-        </div>
-        <div class="override-card__title">${overrideTargetLabel(ov)}</div>
-        <div class="override-card__meta">
-          Provider: ${providerChip(ov.provider)} · by ${ov.createdBy} · ${relTime(ov.createdAt)}
-          ${ov.note ? `<br><span style="color:var(--fg-subtle);">${ov.note}</span>` : ''}
-        </div>
-        <div class="override-card__impact">Affects <strong>${affected}</strong> event${affected!==1?'s':''}</div>
-      </div>
-      <div class="override-card__actions">
-        <button class="icon-btn" onclick="editOverride('${ov.id}')" aria-label="Edit">${ic('square-pen',16)}</button>
-        <button class="icon-btn" onclick="removeOverride('${ov.id}')" aria-label="Remove">${ic('trash-2',16)}</button>
-      </div>
-    </div>`;
-  }).join('') || '<div class="empty-state" style="padding:var(--sp-8);">No overrides match these filters.</div>';
+  list.innerHTML = `<div class="card" style="overflow:auto;">
+    <table class="gaps-table" style="min-width:700px;">
+      <thead><tr>
+        <th>Scope</th><th>Target</th><th>Phase</th><th>Provider</th><th>Expires</th><th>Created by</th><th>Events</th><th style="width:72px;"></th>
+      </tr></thead>
+      <tbody>${overrides.map(ov=>{
+        const affected = computeAffectedEvents(ov).length;
+        return `<tr>
+          <td><span class="badge-scope badge-scope--${ov.scope}">${ov.scope}</span></td>
+          <td><strong>${overrideTargetLabel(ov)}</strong>${ov.note?`<br><span class="muted" style="font-size:11px;">${ov.note}</span>`:''}</td>
+          <td>${ov.matchType==='prematch'?'Pre-Match':'In-Play'}</td>
+          <td>${providerChip(ov.provider)}</td>
+          <td>${expiryBadge(ov)||'—'}</td>
+          <td><span class="muted">${ov.createdBy}<br>${relTime(ov.createdAt)}</span></td>
+          <td>${affected}</td>
+          <td>
+            <button class="icon-btn" onclick="editOverride('${ov.id}')" aria-label="Edit">${ic('square-pen',16)}</button>
+            <button class="icon-btn" onclick="removeOverride('${ov.id}')" aria-label="Remove">${ic('trash-2',16)}</button>
+          </td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+  </div>` || '<div class="empty-state" style="padding:var(--sp-8);">No overrides match these filters.</div>';
 }
 
 function removeOverride(id){
@@ -1009,142 +1079,124 @@ function removeOverride(id){
 function editOverride(id){
   const ov = EVENT_OVERRIDES.find(o=>o.id===id); if(!ov) return;
   coEditingId = id;
-  coDraft = { ...ov };
-  coStep = 2;
-  renderCreateStep2(ov.scope);
+  coDraft = { ...ov, prematchProvider: ov.matchType==='prematch'?ov.provider:null, inplayProvider: ov.matchType==='inplay'?ov.provider:null };
+  renderCreateForm();
   openOverlay('overlay-create-override');
 }
 
-/* ---- Create Override modal — 3-step journey ---- */
-let coStep = 1;
+/* ---- Create Override modal — single form with dropdowns ---- */
 let coDraft = {};
 let coEditingId = null;
 
 function openCreateOverrideModal(){
-  coStep = 1;
   coDraft = {};
   coEditingId = null;
-  renderCreateStep1();
+  renderCreateForm();
   openOverlay('overlay-create-override');
 }
 
-function stepIndicator(active){
-  const labels = ['Scope','Configure','Confirm'];
-  return `<div class="step-indicator">${labels.map((l,i)=>{
-    const n = i+1;
-    const cls = n===active ? 'step-indicator__dot--active' : (n<active ? 'step-indicator__dot--done' : '');
-    return (i>0?'<span class="step-indicator__line"></span>':'') +
-      `<span class="step-indicator__dot ${cls}">${n}</span><span>${l}</span>`;
-  }).join('')}</div>`;
-}
-
-function renderCreateStep1(){
-  const title = document.getElementById('co-title');
-  const sub = document.getElementById('co-subtitle');
-  title.textContent = 'Create Override';
-  sub.textContent = 'Step 1 of 3 — Choose scope';
-  document.getElementById('co-body').innerHTML = `
-    ${stepIndicator(1)}
-    <div class="scope-cards">
-      <div class="scope-card" onclick="event.stopPropagation(); coDraft={scope:'event'}; renderCreateStep2('event')">
-        <div class="scope-card__icon">${ic('calendar',24)}</div>
-        <div class="scope-card__title">Event</div>
-        <div class="scope-card__desc">Override the provider for a single event</div>
-      </div>
-      <div class="scope-card" onclick="event.stopPropagation(); coDraft={scope:'competition'}; renderCreateStep2('competition')">
-        <div class="scope-card__icon">${ic('layers',24)}</div>
-        <div class="scope-card__title">Competition</div>
-        <div class="scope-card__desc">Override all events in a competition (temporary)</div>
-      </div>
-      <div class="scope-card" onclick="event.stopPropagation(); coDraft={scope:'market'}; renderCreateStep2('market')">
-        <div class="scope-card__icon">${ic('layout-grid',24)}</div>
-        <div class="scope-card__title">Market</div>
-        <div class="scope-card__desc">Override a market type — across all events or scoped to a competition</div>
-      </div>
-    </div>`;
-  document.getElementById('co-footer').innerHTML = `
-    <button class="btn btn-tertiary" data-close="overlay-create-override">Cancel</button>`;
-}
-
-function renderCreateStep2(scope){
-  coStep = 2;
-  coDraft.scope = scope;
+function renderCreateForm(){
   const isEdit = !!coEditingId;
   document.getElementById('co-title').textContent = isEdit ? 'Edit Override' : 'Create Override';
-  document.getElementById('co-subtitle').textContent = `Step 2 of 3 — Configure ${scope} override`;
+  document.getElementById('co-subtitle').textContent = 'Set provider overrides for events, competitions, or markets';
 
-  let fields = '';
-  if (scope === 'event'){
-    const eventOpts = EVENTS.map(e=>`<option value="${e.id}" ${coDraft.eventId===e.id?'selected':''}>${e.name} (${e.id})</option>`).join('');
-    fields = `
-      <div class="field"><label>Event</label><select class="select" id="co-event"><option value="">Select an event…</option>${eventOpts}</select></div>
-      <div class="field"><label>Match Type</label>
-        <div class="seg" style="display:inline-flex;">
-          <button class="seg__btn ${coDraft.matchType==='prematch'||!coDraft.matchType?'active':''}" onclick="coDraft.matchType='prematch';this.parentElement.querySelectorAll('.seg__btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Pre-Match</button>
-          <button class="seg__btn ${coDraft.matchType==='inplay'?'active':''}" onclick="coDraft.matchType='inplay';this.parentElement.querySelectorAll('.seg__btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">In-Play</button>
-        </div>
-      </div>
-      <div class="field"><label>Provider</label><select class="select" id="co-provider"><option value="">Select a provider…</option>${PROVIDERS.map(p=>`<option value="${p.id}" ${coDraft.provider===p.id?'selected':''}>${p.name}</option>`).join('')}</select></div>
-      <div class="field"><label>Note (optional)</label><input class="input" id="co-note" placeholder="Reason for override…" value="${coDraft.note||''}"></div>`;
-  } else if (scope === 'competition'){
-    const sportOpts = SPORTS.map(s=>`<option value="${s.id}" ${coDraft.sportId===s.id?'selected':''}>${s.name}</option>`).join('');
-    fields = `
-      <div class="field"><label>Sport</label><select class="select" id="co-sport" onchange="coUpdateCompetitions()"><option value="">Select a sport…</option>${sportOpts}</select></div>
-      <div class="field"><label>Competition</label><select class="select" id="co-competition"><option value="">Select a competition…</option></select></div>
-      <div class="field"><label>Match Type</label>
-        <div class="seg" style="display:inline-flex;">
-          <button class="seg__btn ${coDraft.matchType==='prematch'||!coDraft.matchType?'active':''}" onclick="coDraft.matchType='prematch';this.parentElement.querySelectorAll('.seg__btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Pre-Match</button>
-          <button class="seg__btn ${coDraft.matchType==='inplay'?'active':''}" onclick="coDraft.matchType='inplay';this.parentElement.querySelectorAll('.seg__btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">In-Play</button>
-        </div>
-      </div>
-      <div class="field"><label>Provider</label><select class="select" id="co-provider"><option value="">Select a provider…</option>${PROVIDERS.map(p=>`<option value="${p.id}" ${coDraft.provider===p.id?'selected':''}>${p.name}</option>`).join('')}</select></div>
-      <div class="field"><label>Expires (optional)</label><input class="input" type="datetime-local" id="co-expires" value="${coDraft.expiresAt?toLocalInput(new Date(coDraft.expiresAt)):''}"></div>
-      <div class="field"><label>Note (optional)</label><input class="input" id="co-note" placeholder="Reason for override…" value="${coDraft.note||''}"></div>`;
-  } else {
-    const sportOpts = SPORTS.map(s=>`<option value="${s.id}" ${coDraft.sportId===s.id?'selected':''}>${s.name}</option>`).join('');
-    fields = `
-      <div class="field"><label>Sport</label><select class="select" id="co-sport" onchange="coUpdateMarketTypes(); coUpdateCompetitions()"><option value="">Select a sport…</option>${sportOpts}</select></div>
-      <div class="field"><label>Market Type</label><select class="select" id="co-market-type"><option value="">Select a market type…</option></select></div>
-      <div class="field"><label><input type="checkbox" id="co-scope-comp" ${coDraft.competitionId?'checked':''}  onchange="document.getElementById('co-competition-wrap').style.display=this.checked?'':'none'"> Scope to a specific competition</label></div>
-      <div class="field" id="co-competition-wrap" style="display:${coDraft.competitionId?'':'none'};"><label>Competition</label><select class="select" id="co-competition"><option value="">All competitions in sport</option></select></div>
-      <div class="field"><label>Match Type</label>
-        <div class="seg" style="display:inline-flex;">
-          <button class="seg__btn ${coDraft.matchType==='prematch'||!coDraft.matchType?'active':''}" onclick="coDraft.matchType='prematch';this.parentElement.querySelectorAll('.seg__btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">Pre-Match</button>
-          <button class="seg__btn ${coDraft.matchType==='inplay'?'active':''}" onclick="coDraft.matchType='inplay';this.parentElement.querySelectorAll('.seg__btn').forEach(b=>b.classList.remove('active'));this.classList.add('active')">In-Play</button>
-        </div>
-      </div>
-      <div class="field"><label>Provider</label><select class="select" id="co-provider"><option value="">Select a provider…</option>${PROVIDERS.map(p=>`<option value="${p.id}" ${coDraft.provider===p.id?'selected':''}>${p.name}</option>`).join('')}</select></div>
-      <div class="field"><label>Expires (optional)</label><input class="input" type="datetime-local" id="co-expires" value="${coDraft.expiresAt?toLocalInput(new Date(coDraft.expiresAt)):''}"></div>
-      <div class="field"><label>Note (optional)</label><input class="input" id="co-note" placeholder="Reason for override…" value="${coDraft.note||''}"></div>`;
-  }
+  const scopeVal = coDraft.scope || '';
+  const sportOpts = SPORTS.map(s=>`<option value="${s.id}" ${coDraft.sportId===s.id?'selected':''}>${s.name}</option>`).join('');
+  const provOpts = PROVIDERS.map(p=>`<option value="${p.id}" ${coDraft.prematchProvider===p.id?'selected':''}>${p.name}</option>`).join('');
+  const provOptsInplay = PROVIDERS.map(p=>`<option value="${p.id}" ${coDraft.inplayProvider===p.id?'selected':''}>${p.name}</option>`).join('');
 
-  document.getElementById('co-body').innerHTML = `${stepIndicator(2)}${fields}`;
+  document.getElementById('co-body').innerHTML = `
+    <div class="co-form">
+      <div class="field">
+        <label>Scope</label>
+        <select class="select" id="co-scope" onchange="coScopeChanged()">
+          <option value="">Select scope…</option>
+          <option value="event" ${scopeVal==='event'?'selected':''}>Event</option>
+          <option value="competition" ${scopeVal==='competition'?'selected':''}>Competition</option>
+          <option value="market" ${scopeVal==='market'?'selected':''}>Market</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Sport</label>
+        <select class="select" id="co-sport" onchange="coSportChanged()">
+          <option value="">Select sport…</option>${sportOpts}
+        </select>
+      </div>
+      <div class="field" id="co-event-wrap" style="display:${scopeVal==='event'?'':'none'};">
+        <label>Event</label>
+        <select class="select" id="co-event" multiple size="4">
+          <option value="">Select event(s)…</option>
+        </select>
+        <span class="muted" style="font-size:11px;">Hold Ctrl/Cmd to select multiple</span>
+      </div>
+      <div class="field" id="co-competition-wrap" style="display:${scopeVal==='competition'||scopeVal==='market'?'':'none'};">
+        <label>Competition</label>
+        <select class="select" id="co-competition" multiple size="4">
+          <option value="">Select competition(s)…</option>
+        </select>
+        <span class="muted" style="font-size:11px;">Hold Ctrl/Cmd to select multiple</span>
+      </div>
+      <div class="field" id="co-market-wrap" style="display:${scopeVal==='market'?'':'none'};">
+        <label>Market Type</label>
+        <select class="select" id="co-market-type">
+          <option value="">Select market type…</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Pre-Match Provider</label>
+        <select class="select" id="co-provider-pre">
+          <option value="">No change</option>${provOpts}
+        </select>
+      </div>
+      <div class="field">
+        <label>In-Play Provider</label>
+        <select class="select" id="co-provider-inp">
+          <option value="">No change</option>${provOptsInplay}
+        </select>
+      </div>
+      <div class="field">
+        <label>Expires (optional)</label>
+        <input class="input" type="datetime-local" id="co-expires" value="${coDraft.expiresAt?toLocalInput(new Date(coDraft.expiresAt)):''}">
+      </div>
+      <div class="field">
+        <label>Note (optional)</label>
+        <input class="input" id="co-note" placeholder="Reason for override…" value="${coDraft.note||''}">
+      </div>
+    </div>`;
+
   document.getElementById('co-footer').innerHTML = `
-    ${isEdit?'':'<button class="btn btn-tertiary" onclick="event.stopPropagation(); renderCreateStep1()">Back</button>'}
     <button class="btn btn-tertiary" data-close="overlay-create-override">Cancel</button>
-    <button class="btn btn-primary" onclick="event.stopPropagation(); validateAndShowStep3()">Next: Review</button>`;
+    <button class="btn btn-primary" onclick="event.stopPropagation(); validateAndSaveOverride()">${isEdit?'Update':'Create'}</button>`;
 
-  if (scope === 'competition' || scope === 'market'){
-    if (coDraft.sportId) coUpdateCompetitions();
-    if (scope === 'market' && coDraft.sportId) coUpdateMarketTypes();
-  }
+  if (coDraft.sportId) coSportChanged();
 }
 
-function coUpdateCompetitions(){
+function coScopeChanged(){
+  const scope = document.getElementById('co-scope').value;
+  document.getElementById('co-event-wrap').style.display = scope==='event'?'':'none';
+  document.getElementById('co-competition-wrap').style.display = (scope==='competition'||scope==='market')?'':'none';
+  document.getElementById('co-market-wrap').style.display = scope==='market'?'':'none';
+  if (scope==='event') coPopulateEvents();
+}
+
+function coSportChanged(){
   const sportId = document.getElementById('co-sport')?.value;
-  const compSel = document.getElementById('co-competition');
-  if (!compSel) return;
+  const scope = document.getElementById('co-scope')?.value;
   const sport = SPORTS.find(s=>s.id===sportId);
-  compSel.innerHTML = '<option value="">'+( coDraft.scope==='market' ? 'All competitions in sport' : 'Select a competition…')+'</option>';
-  if (sport) sport.competitions.forEach(c=> compSel.innerHTML += `<option value="${c.id}" ${coDraft.competitionId===c.id?'selected':''}>${c.name}</option>`);
-}
-function coUpdateMarketTypes(){
-  const sportId = document.getElementById('co-sport')?.value;
+  const compSel = document.getElementById('co-competition');
+  compSel.innerHTML = '';
+  if (sport) sport.competitions.forEach(c=> compSel.innerHTML += `<option value="${c.id}">${c.name}</option>`);
   const mtSel = document.getElementById('co-market-type');
-  if (!mtSel) return;
   const types = SPORT_MARKET_TYPES[sportId] || [];
-  mtSel.innerHTML = '<option value="">Select a market type…</option>' +
-    types.map(t=>`<option value="${t}" ${coDraft.marketType===t?'selected':''}>${t}</option>`).join('');
+  mtSel.innerHTML = '<option value="">Select market type…</option>' + types.map(t=>`<option value="${t}">${t}</option>`).join('');
+  if (scope==='event') coPopulateEvents();
+}
+
+function coPopulateEvents(){
+  const sportId = document.getElementById('co-sport')?.value;
+  const evtSel = document.getElementById('co-event');
+  const filtered = sportId ? EVENTS.filter(e=>e.sport===sportId) : EVENTS;
+  evtSel.innerHTML = filtered.map(e=>`<option value="${e.id}">${e.name} (${e.id})</option>`).join('');
 }
 
 function toLocalInput(d){
@@ -1152,112 +1204,61 @@ function toLocalInput(d){
   return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-function validateAndShowStep3(){
-  const scope = coDraft.scope;
-  coDraft.matchType = coDraft.matchType || 'prematch';
-  coDraft.provider = document.getElementById('co-provider')?.value;
-  coDraft.note = document.getElementById('co-note')?.value || '';
+function validateAndSaveOverride(){
+  const scope = document.getElementById('co-scope')?.value;
+  if (!scope){ toast('warning','Missing field','Select a scope.'); return; }
+  const sportId = document.getElementById('co-sport')?.value;
+  if (!sportId){ toast('warning','Missing field','Select a sport.'); return; }
+  const prematchProv = document.getElementById('co-provider-pre')?.value || null;
+  const inplayProv = document.getElementById('co-provider-inp')?.value || null;
+  if (!prematchProv && !inplayProv){ toast('warning','Missing field','Set at least one provider.'); return; }
+  const note = document.getElementById('co-note')?.value || '';
   const expiresEl = document.getElementById('co-expires');
-  coDraft.expiresAt = expiresEl?.value ? new Date(expiresEl.value).toISOString() : null;
+  const expiresAt = expiresEl?.value ? new Date(expiresEl.value).toISOString() : null;
+
+  const overrides = [];
 
   if (scope === 'event'){
-    coDraft.eventId = document.getElementById('co-event')?.value;
-    if (!coDraft.eventId){ toast('warning','Missing field','Select an event.'); return; }
-    const evt = EVENTS.find(e=>e.id===coDraft.eventId);
-    coDraft.sportId = evt.sport;
-    coDraft.competitionId = evt.competition;
+    const selected = [...document.getElementById('co-event').selectedOptions].map(o=>o.value);
+    if (!selected.length){ toast('warning','Missing field','Select at least one event.'); return; }
+    selected.forEach(evtId=>{
+      const evt = EVENTS.find(e=>e.id===evtId);
+      if (prematchProv) overrides.push({ scope:'event', eventId:evtId, sportId:evt.sport, competitionId:evt.competition, marketType:null, matchType:'prematch', provider:prematchProv, expiresAt, note });
+      if (inplayProv) overrides.push({ scope:'event', eventId:evtId, sportId:evt.sport, competitionId:evt.competition, marketType:null, matchType:'inplay', provider:inplayProv, expiresAt, note });
+    });
   } else if (scope === 'competition'){
-    coDraft.sportId = document.getElementById('co-sport')?.value;
-    coDraft.competitionId = document.getElementById('co-competition')?.value;
-    if (!coDraft.sportId || !coDraft.competitionId){ toast('warning','Missing field','Select a sport and competition.'); return; }
+    const selected = [...document.getElementById('co-competition').selectedOptions].map(o=>o.value);
+    if (!selected.length){ toast('warning','Missing field','Select at least one competition.'); return; }
+    selected.forEach(compId=>{
+      if (prematchProv) overrides.push({ scope:'competition', eventId:null, sportId, competitionId:compId, marketType:null, matchType:'prematch', provider:prematchProv, expiresAt, note });
+      if (inplayProv) overrides.push({ scope:'competition', eventId:null, sportId, competitionId:compId, marketType:null, matchType:'inplay', provider:inplayProv, expiresAt, note });
+    });
   } else {
-    coDraft.sportId = document.getElementById('co-sport')?.value;
-    coDraft.marketType = document.getElementById('co-market-type')?.value;
-    const scopeComp = document.getElementById('co-scope-comp')?.checked;
-    coDraft.competitionId = scopeComp ? (document.getElementById('co-competition')?.value || null) : null;
-    if (!coDraft.sportId || !coDraft.marketType){ toast('warning','Missing field','Select a sport and market type.'); return; }
+    const marketType = document.getElementById('co-market-type')?.value;
+    if (!marketType){ toast('warning','Missing field','Select a market type.'); return; }
+    const selectedComps = [...document.getElementById('co-competition').selectedOptions].map(o=>o.value);
+    const compId = selectedComps.length === 1 ? selectedComps[0] : null;
+    if (prematchProv) overrides.push({ scope:'market', eventId:null, sportId, competitionId:compId, marketType, matchType:'prematch', provider:prematchProv, expiresAt, note });
+    if (inplayProv) overrides.push({ scope:'market', eventId:null, sportId, competitionId:compId, marketType, matchType:'inplay', provider:inplayProv, expiresAt, note });
   }
-  if (!coDraft.provider){ toast('warning','Missing field','Select a provider.'); return; }
 
-  renderCreateStep3();
-}
-
-function renderCreateStep3(){
-  coStep = 3;
-  const isEdit = !!coEditingId;
-  document.getElementById('co-title').textContent = isEdit ? 'Edit Override' : 'Create Override';
-  document.getElementById('co-subtitle').textContent = 'Step 3 of 3 — Confirm impact';
-
-  const affected = computeAffectedEvents(coDraft);
-  const mtLabel = coDraft.matchType === 'prematch' ? 'Pre-Match' : 'In-Play';
-  const provName = providerById(coDraft.provider)?.name || coDraft.provider;
-
-  const summaryHtml = `
-    <div class="card card-pad" style="margin-bottom:var(--sp-3);">
-      <div class="flex-gap-2" style="margin-bottom:var(--sp-2);">
-        <span class="badge-scope badge-scope--${coDraft.scope}">${coDraft.scope}</span>
-        ${coDraft.matchType==='prematch'?'<span class="badge badge-preplay">Pre-Match</span>':'<span class="badge badge-inplay">In-Play</span>'}
-      </div>
-      <div style="font-weight:var(--fw-semibold);color:var(--fg-title);margin-bottom:4px;">${overrideTargetLabel(coDraft)}</div>
-      <div>Provider: ${providerChip(coDraft.provider)}</div>
-      ${coDraft.expiresAt ? `<div style="margin-top:4px;">${expiryBadge(coDraft)}</div>` : ''}
-      ${coDraft.note ? `<div class="muted" style="font-size:11px;margin-top:4px;">${coDraft.note}</div>` : ''}
-    </div>`;
-
-  const eventsHtml = affected.length ? `
-    <div class="affected-list">${affected.map(evt=>{
-      const sport = sportByCompetitionId(evt.competition);
-      const comp = sport.competitions.find(c=>c.id===evt.competition);
-      const current = effectiveMatchTypeProvider(sport, comp, coDraft.matchType).value;
-      const currentName = providerById(current)?.name || 'none';
-      return `<div class="affected-row">
-        <div class="affected-row__name">
-          <strong>${evt.name}</strong><br>
-          <span class="muted" style="font-size:11px;">${competitionName(evt.competition)} · ${evt.id}</span>
-        </div>
-        <span class="muted">${currentName}</span>
-        <span class="affected-row__arrow">→</span>
-        <strong>${provName}</strong>
-      </div>`;
-    }).join('')}</div>` : '<div class="muted" style="padding:var(--sp-4);">No matching events found in the current schedule.</div>';
-
-  document.getElementById('co-body').innerHTML = `
-    ${stepIndicator(3)}
-    <div style="font-size:var(--fs-sm);font-weight:var(--fw-semibold);margin-bottom:var(--sp-2);">
-      This override will affect <strong>${affected.length}</strong> event${affected.length!==1?'s':''}
-    </div>
-    ${summaryHtml}
-    ${eventsHtml}`;
-
-  document.getElementById('co-footer').innerHTML = `
-    <button class="btn btn-tertiary" onclick="event.stopPropagation(); renderCreateStep2('${coDraft.scope}')">Back</button>
-    <button class="btn btn-tertiary" data-close="overlay-create-override">Cancel</button>
-    <button class="btn btn-primary" onclick="event.stopPropagation(); saveOverride()">Confirm &amp; Save</button>`;
-}
-
-function saveOverride(){
   if (coEditingId){
     const i = EVENT_OVERRIDES.findIndex(o=>o.id===coEditingId);
-    if (i>=0){
-      EVENT_OVERRIDES[i] = { ...coDraft, id:coEditingId, createdAt:EVENT_OVERRIDES[i].createdAt, createdBy:EVENT_OVERRIDES[i].createdBy };
-      logAudit('Level 2 — Event Overrides','Override updated',`${coDraft.scope}: ${overrideTargetLabel(coDraft)} → ${providerById(coDraft.provider)?.name}`);
+    if (i>=0 && overrides.length){
+      EVENT_OVERRIDES[i] = { ...overrides[0], id:coEditingId, createdAt:EVENT_OVERRIDES[i].createdAt, createdBy:EVENT_OVERRIDES[i].createdBy };
+      logAudit('Level 2 — Event Overrides','Override updated',`${overrides[0].scope}: ${overrideTargetLabel(EVENT_OVERRIDES[i])} → ${providerById(overrides[0].provider)?.name}`);
     }
   } else {
-    const newOv = {
-      id: genOverrideId(), scope:coDraft.scope,
-      eventId: coDraft.eventId||null, sportId:coDraft.sportId,
-      competitionId: coDraft.competitionId||null, marketType:coDraft.marketType||null,
-      matchType: coDraft.matchType, provider:coDraft.provider,
-      expiresAt: coDraft.expiresAt||null,
-      createdAt: new Date().toISOString(), createdBy:'m.tato',
-      note: coDraft.note||''
-    };
-    EVENT_OVERRIDES.push(newOv);
-    logAudit('Level 2 — Event Overrides','Override created',`${coDraft.scope}: ${overrideTargetLabel(coDraft)} → ${providerById(coDraft.provider)?.name}`);
+    overrides.forEach(o=>{
+      const newOv = { ...o, id:genOverrideId(), createdAt:new Date().toISOString(), createdBy:'m.tato' };
+      EVENT_OVERRIDES.push(newOv);
+      logAudit('Level 2 — Event Overrides','Override created',`${o.scope}: ${overrideTargetLabel(newOv)} → ${providerById(o.provider)?.name}`);
+    });
   }
+
   closeOverlay('overlay-create-override');
   renderOverridesList();
-  toast('success', coEditingId ? 'Override updated' : 'Override created', overrideTargetLabel(coDraft));
+  toast('success', coEditingId ? 'Override updated' : `${overrides.length} override${overrides.length!==1?'s':''} created`, '');
   coEditingId = null;
   coDraft = {};
 }
@@ -1342,9 +1343,20 @@ function renderProviderDashboard(){
     </div>`;
   }).join('') + (COVERAGE_GAPS.length ? `<div style="grid-column:1/-1;margin-top:var(--sp-2);">
     <h4 style="font-weight:var(--fw-semibold);margin-bottom:var(--sp-2);color:var(--fg-title);">Coverage Gaps</h4>
-    ${COVERAGE_GAPS.map(g=>`<div class="alert alert-${g.severity==='error'?'error':'warning'}" style="margin-bottom:4px;">
-      ${ICONS.alert()}<div><strong>${g.sport} — ${g.competition}</strong> ${g.issue}</div>
-    </div>`).join('')}</div>` : '');
+    <div class="card" style="overflow:auto;">
+      <table class="gaps-table" style="min-width:640px;">
+        <thead><tr>
+          <th style="width:110px;">Severity</th><th>Sport</th><th>Competition</th><th>Issue</th>
+        </tr></thead>
+        <tbody>${COVERAGE_GAPS.map(g=>`<tr>
+          <td><span class="badge ${g.severity==='error'?'badge-red':'badge-yellow'}">${g.severity==='error'?'Error':'Warning'}</span></td>
+          <td><strong>${g.sport}</strong></td>
+          <td>${g.competition}</td>
+          <td class="muted">${g.issue}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>
+  </div>` : '');
 }
 
 function openSuspendModal(providerId){
