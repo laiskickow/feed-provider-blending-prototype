@@ -160,19 +160,53 @@ const EVENTS = [
   { id:'EVT-50210', sport:'ebasketball', competition:'eba-h2h', name:'ProGamer_X vs NightWolf', start:hoursFromNow(2), status:'pre-match', overrides:{ prematch:null, inplay:null } },
 ];
 
-// ---- Saved filter presets (Event Overrides) --------------------------
-const SAVED_PRESETS = [
-  { id:'p1', name:'Live events only', createdAt:'2026-07-28T09:12:00Z', filters:{ sport:'', competition:'', status:'in-play', range:'7', override:'' } },
-  { id:'p2', name:'Cricket — next 7d', createdAt:'2026-08-03T14:40:00Z', filters:{ sport:'cricket', competition:'', status:'', range:'7', override:'' } },
-  { id:'p3', name:'Overridden events', createdAt:'2026-08-10T11:05:00Z', filters:{ sport:'', competition:'', status:'', range:'30', override:'yes' } },
+// ---- Event Overrides (Level 2) — central override collection --------
+// Scopes: 'event' (single event), 'competition' (all events in a comp),
+// 'market' (a market type, optionally scoped to a competition).
+// Resolution priority: event > market+comp > market+global > competition > L1 hierarchy.
+let EVENT_OVERRIDES = [
+  {
+    id:'ov-1', scope:'event', eventId:'EVT-10240',
+    sportId:'soccer', competitionId:'sv-euro', marketType:null,
+    matchType:'inplay', provider:'betradar',
+    expiresAt:null,
+    createdAt:'2026-08-10T09:12:00Z', createdBy:'j.alvarez',
+    note:'Highlight feed unstable for this fixture'
+  },
+  {
+    id:'ov-2', scope:'event', eventId:'EVT-30044',
+    sportId:'cricket', competitionId:'cr-ipl', marketType:null,
+    matchType:'prematch', provider:'betradar',
+    expiresAt:null,
+    createdAt:'2026-08-09T16:40:00Z', createdBy:'k.nguyen',
+    note:'IPL data quality issue'
+  },
+  {
+    id:'ov-3', scope:'competition', eventId:null,
+    sportId:'basketball', competitionId:'eb-euroleague', marketType:null,
+    matchType:'inplay', provider:'betgenious',
+    expiresAt:'2026-08-18T00:00:00Z',
+    createdAt:'2026-08-08T11:00:00Z', createdBy:'m.tato',
+    note:'BetRadar in-play feed missing for EuroLeague'
+  },
+  {
+    id:'ov-4', scope:'market', eventId:null,
+    sportId:'basketball', competitionId:null, marketType:'Match Winner',
+    matchType:'inplay', provider:'betgenious',
+    expiresAt:null,
+    createdAt:'2026-08-07T15:00:00Z', createdBy:'m.tato',
+    note:'BetGenious has better in-play odds for Match Winner across basketball'
+  },
 ];
+let nextOvId = 5;
+function genOverrideId(){ return `ov-${nextOvId++}`; }
 
 // ---- Provider health / outages (Level 3) --------------------------------
 const PROVIDER_HEALTH = {
-  betradar:   { status:'operational', uptime30d:99.94 },
-  betgenious: { status:'degraded',    uptime30d:98.61 },
-  inspired:   { status:'operational', uptime30d:99.88 },
-  highlight:  { status:'down',        uptime30d:97.20 },
+  betradar:   { status:'operational', uptime30d:99.94, backup:null, suspendReason:null },
+  betgenious: { status:'degraded',    uptime30d:98.61, backup:{ provider:'betradar', autoResume:true }, suspendReason:null },
+  inspired:   { status:'operational', uptime30d:99.88, backup:null, suspendReason:null },
+  highlight:  { status:'down',        uptime30d:97.20, backup:{ provider:'inspired', autoResume:false }, suspendReason:null },
 };
 
 // Per-event automation log — the record of every automated action the

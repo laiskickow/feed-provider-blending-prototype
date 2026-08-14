@@ -692,3 +692,77 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
 .scroll-y{overflow-y:auto;}
 .panel-split{display:grid;grid-template-columns:280px 1fr;gap:var(--sp-4);}
 @media (max-width:1100px){.panel-split{grid-template-columns:1fr;}}
+
+/* ============================================================
+   OVERRIDE CARDS (Event Overrides redesign)
+   ============================================================ */
+.override-card{
+  display:flex;align-items:flex-start;gap:var(--sp-3);
+  padding:var(--sp-3) var(--sp-4);
+  background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radii-lg);
+  margin-bottom:var(--sp-2);border-left:3px solid var(--border);
+}
+.override-card--event{border-left-color:var(--blue-solid);}
+.override-card--competition{border-left-color:var(--green-solid);}
+.override-card--market{border-left-color:var(--yellow-solid);}
+.override-card__body{flex:1;min-width:0;}
+.override-card__head{display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-1);}
+.override-card__title{font-weight:var(--fw-semibold);color:var(--fg-title);font-size:var(--fs-sm);}
+.override-card__meta{font-size:11px;color:var(--fg-muted);margin-bottom:var(--sp-1);}
+.override-card__impact{font-size:11px;color:var(--fg-muted);}
+.override-card__actions{display:flex;gap:var(--sp-1);flex:none;margin-top:var(--sp-0_5);}
+
+/* Scope badges */
+.badge-scope{font-size:10px;font-weight:var(--fw-bold);border-radius:var(--radii-sm);padding:2px 6px;text-transform:uppercase;letter-spacing:.3px;}
+.badge-scope--event{background:var(--blue-subtle);color:var(--blue-fg);}
+.badge-scope--competition{background:var(--green-subtle);color:var(--green-fg);}
+.badge-scope--market{background:var(--yellow-subtle);color:var(--yellow-fg);}
+
+/* Expiry badge */
+.badge-expiry{font-size:10px;font-weight:var(--fw-medium);border-radius:var(--radii-sm);padding:2px 6px;background:var(--bg-muted);color:var(--fg-muted);}
+.badge-expiry--soon{background:var(--yellow-subtle);color:var(--yellow-fg);}
+.badge-expiry--expired{background:var(--red-subtle);color:var(--red-fg);}
+
+/* ---- Create Override modal: scope cards (Step 1) ---- */
+.scope-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-3);}
+.scope-card{
+  padding:var(--sp-4);border:1px solid var(--border);border-radius:var(--radii-lg);
+  cursor:pointer;text-align:center;background:var(--bg-panel);transition:border-color .15s, background .15s;
+}
+.scope-card:hover{background:var(--bg-muted);border-color:var(--border-muted);}
+.scope-card__icon{margin-bottom:var(--sp-2);color:var(--fg-muted);}
+.scope-card__title{font-weight:var(--fw-semibold);font-size:var(--fs-sm);color:var(--fg-title);margin-bottom:var(--sp-1);}
+.scope-card__desc{font-size:var(--fs-xs);color:var(--fg-muted);line-height:1.4;}
+
+/* Step indicator */
+.step-indicator{display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-4);font-size:var(--fs-xs);color:var(--fg-muted);}
+.step-indicator__dot{width:24px;height:24px;border-radius:var(--radii-full);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:var(--fw-bold);border:1px solid var(--border);}
+.step-indicator__dot--active{background:var(--gray-solid);color:var(--gray-contrast);border-color:var(--gray-solid);}
+.step-indicator__dot--done{background:var(--green-subtle);color:var(--green-fg);border-color:var(--green-muted);}
+.step-indicator__line{width:24px;height:1px;background:var(--border);}
+
+/* Affected events list (Step 3) */
+.affected-list{max-height:360px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radii-md);}
+.affected-row{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-2) var(--sp-3);border-bottom:1px solid var(--border-subtle);font-size:var(--fs-xs);}
+.affected-row:last-child{border-bottom:0;}
+.affected-row__name{flex:1;min-width:0;}
+.affected-row__arrow{color:var(--fg-subtle);flex:none;}
+
+/* ============================================================
+   PROVIDER DASHBOARD (merged Health + Coverage)
+   ============================================================ */
+.provider-dash{
+  background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radii-lg);
+  padding:var(--sp-4);
+}
+.provider-dash__header{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--sp-3);}
+.provider-dash__metrics{display:flex;gap:var(--sp-4);margin-bottom:var(--sp-3);flex-wrap:wrap;}
+.provider-dash__metric{text-align:center;min-width:80px;}
+.provider-dash__metric-value{font-size:var(--fs-lg);font-weight:var(--fw-bold);color:var(--fg-title);}
+.provider-dash__metric-label{font-size:10px;color:var(--fg-muted);text-transform:uppercase;letter-spacing:.3px;}
+.provider-dash__gaps{margin-bottom:var(--sp-3);}
+.provider-dash__actions{display:flex;gap:var(--sp-2);border-top:1px solid var(--border-subtle);padding-top:var(--sp-3);}
+
+/* Suspended badge */
+.badge-suspended{background:var(--red-subtle);color:var(--red-fg);font-size:10px;font-weight:var(--fw-bold);border-radius:var(--radii-sm);padding:2px 6px;}
+.badge-backup{background:var(--blue-subtle);color:var(--blue-fg);font-size:10px;font-weight:var(--fw-medium);border-radius:var(--radii-sm);padding:2px 6px;}

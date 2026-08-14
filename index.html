@@ -6,7 +6,7 @@
 <title>Feed Provider Blending &amp; Integration Platform</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Murecho:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=14">
+<link rel="stylesheet" href="styles.css?v=16">
 </head>
 <body>
 <!-- ============ SVG SPRITE — Lucide icons, Ivory stroke scale ============ -->
@@ -147,80 +147,58 @@
         <span><strong id="bc-pending-count">0</strong> unsaved change(s)</span>
         <span class="sep"></span>
         <button class="btn btn-sm btn-tertiary" id="bc-discard">Discard</button>
-        <button class="btn btn-sm btn-primary" id="bc-save">Save changes</button>
+        <button class="btn btn-sm btn-primary" id="bc-review">Review &amp; Save</button>
       </div>
     </div>
 
     <!-- ============================================================ -->
-    <!-- LEVEL 2 — EVENT OVERRIDES                                     -->
+    <!-- LEVEL 2 — EVENT OVERRIDES (redesigned)                        -->
     <!-- ============================================================ -->
     <div class="view" id="view-event-overrides" role="tabpanel" aria-labelledby="navtab-event-overrides" tabindex="0" aria-hidden="true">
       <div class="view-header">
         <div>
-          <h1>Event Overrides</h1>
-          <p>Per-event provider overrides for Pre-Match and In-Play, independently. Override one event at a time, then save. Overrides persist across status transitions until manually cleared.</p>
+          <h1>Overrides</h1>
+          <p>Temporary provider overrides for edge cases. These take priority over Blending defaults until removed.</p>
+        </div>
+        <div class="view-header__actions">
+          <button class="btn btn-primary" id="eo-create-btn">
+            <svg class="ic ic-16" aria-hidden="true"><use href="#ic-plus"/></svg>
+            Create Override
+          </button>
         </div>
       </div>
 
-      <div class="toolbar">
+      <div class="toolbar" id="eo-toolbar" style="display:none;">
         <div class="toolbar__search">
           <svg class="ic ic-16" aria-hidden="true"><use href="#ic-search"/></svg>
-          <input data-search="overrides" placeholder="Search by event ID or name…" aria-label="Search events">
+          <input data-search="overrides" placeholder="Search overrides…" aria-label="Search overrides">
           <span class="kbd">/</span>
         </div>
-        <select class="select input-sm" id="eo-filter-sport" style="width:140px;"><option value="">All sports</option></select>
-        <select class="select input-sm" id="eo-filter-competition" style="width:168px;"><option value="">All competitions</option></select>
-        <select class="select input-sm" id="eo-filter-status" style="width:150px;">
-          <option value="">Pre-Match &amp; In-Play</option>
-          <option value="pre-match">Pre-Match only</option>
-          <option value="in-play">In-Play only</option>
+        <select class="select input-sm" id="eo-filter-scope" style="width:160px;">
+          <option value="">All scopes</option>
+          <option value="event">Event</option>
+          <option value="competition">Competition</option>
+          <option value="market">Market</option>
         </select>
-        <select class="select input-sm" id="eo-filter-range" style="width:150px;">
-          <option value="7">Next 7 days</option>
-          <option value="1">Next 24 hours</option>
-          <option value="3">Next 3 days</option>
-          <option value="30">Next 30 days</option>
-          <option value="custom">Custom range…</option>
+        <select class="select input-sm" id="eo-filter-sport" style="width:160px;">
+          <option value="">All sports</option>
         </select>
-        <select class="select input-sm" id="eo-filter-override" style="width:150px;">
-          <option value="">Any override state</option>
-          <option value="yes">Overridden only</option>
-          <option value="no">Inherited only</option>
-        </select>
-        <div class="toolbar__actions">
-          <button class="btn btn-sm btn-tertiary" id="eo-presets-btn">Filter presets</button>
-        </div>
       </div>
 
-      <div class="card">
-        <div style="overflow:auto;max-height:600px;">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Event</th>
-                <th>Competition</th>
-                <th>Start</th>
-                <th>Status</th>
-                <th>Pre-Match provider</th>
-                <th>In-Play provider</th>
-              </tr>
-            </thead>
-            <tbody id="events-tbody"></tbody>
-          </table>
-        </div>
-        <div class="tbl-foot">
-          <span><strong id="eo-result-count">0</strong> events</span>
-          <span class="tbl-foot__right" id="eo-range-label"></span>
-        </div>
-      </div>
+      <!-- Override cards list -->
+      <div id="eo-overrides-list"></div>
 
-      <!-- Save bar — confirm-to-save for staged overrides -->
-      <div class="action-bar" id="eo-action-bar">
-        <span><strong id="eo-pending-count">0</strong> unsaved override(s)</span>
-        <span class="sep"></span>
-        <button class="btn btn-sm btn-tertiary" id="eo-review">Review…</button>
-        <button class="btn btn-sm btn-tertiary" id="eo-discard">Discard</button>
-        <button class="btn btn-sm btn-primary" id="eo-save">Save changes</button>
+      <!-- Empty state -->
+      <div class="card card-pad" id="eo-empty-state" style="display:none;">
+        <div class="empty-state">
+          <svg class="ic ic-24" aria-hidden="true" style="color:var(--fg-subtle);margin-bottom:var(--sp-2);"><use href="#ic-layers"/></svg>
+          <h3 style="font-size:var(--fs-md);margin-bottom:var(--sp-1);">No active overrides</h3>
+          <p style="color:var(--fg-muted);max-width:400px;margin:0 auto var(--sp-3);">Overrides let you temporarily change which provider serves specific events, competitions, or markets — without altering the long-term Blending defaults.</p>
+          <button class="btn btn-primary" id="eo-create-btn-empty">
+            <svg class="ic ic-16" aria-hidden="true"><use href="#ic-plus"/></svg>
+            Create Override
+          </button>
+        </div>
       </div>
     </div>
 
@@ -238,7 +216,6 @@
       <div class="tabs">
         <div class="tab active" data-tab="log">Automation Log</div>
         <div class="tab" data-tab="health">Provider Health</div>
-        <div class="tab" data-tab="coverage">Coverage</div>
         <div class="tab" data-tab="analytics">Analytics</div>
       </div>
 
@@ -260,20 +237,7 @@
       </div>
 
       <div class="tab-panel" id="tab-health">
-        <div class="grid-3" id="provider-health-cards" style="margin-bottom:20px;"></div>
-      </div>
-
-      <div class="tab-panel" id="tab-coverage">
-        <div class="grid-2" style="align-items:stretch;">
-          <div class="card card-pad">
-            <h3 style="font-size:13px;margin-bottom:12px;">Coverage % — served vs. assigned</h3>
-            <div id="coverage-gauges" class="flex-gap-3" style="justify-content:space-between;"></div>
-          </div>
-          <div class="card card-pad">
-            <h3 style="font-size:13px;margin-bottom:12px;">Coverage gaps</h3>
-            <div id="coverage-gaps-list"></div>
-          </div>
-        </div>
+        <div class="grid-2" id="provider-dashboard-cards"></div>
       </div>
 
       <div class="tab-panel" id="tab-analytics">
@@ -569,15 +533,58 @@
   </div>
 </div>
 
-<div class="drawer" id="drawer-override">
-  <div class="modal__header">
-    <div><h3 id="override-drawer-title">Override provider</h3><p id="override-drawer-subtitle"></p></div>
-    <span class="close-x" data-close-drawer="drawer-override"><svg class="ic ic-20" aria-hidden="true"><use href="#ic-x"/></svg></span>
+<!-- Create Override modal (3-step) -->
+<div class="overlay" id="overlay-create-override">
+  <div class="modal modal-lg">
+    <div class="modal__header">
+      <div><h3 id="co-title">Create Override</h3><p id="co-subtitle">Step 1 of 3 — Choose scope</p></div>
+      <span class="close-x" data-close="overlay-create-override"><svg class="ic ic-20" aria-hidden="true"><use href="#ic-x"/></svg></span>
+    </div>
+    <div class="modal__body" id="co-body"></div>
+    <div class="modal__footer" id="co-footer"></div>
   </div>
-  <div class="modal__body" id="override-drawer-body"></div>
+</div>
+
+<!-- Blending review drawer -->
+<div class="drawer" id="drawer-blending-review">
+  <div class="modal__header">
+    <div><h3 id="bc-review-title">Review changes</h3><p id="bc-review-subtitle"></p></div>
+    <span class="close-x" data-close-drawer="drawer-blending-review"><svg class="ic ic-20" aria-hidden="true"><use href="#ic-x"/></svg></span>
+  </div>
+  <div class="modal__body" id="bc-review-body"></div>
   <div class="modal__footer">
-    <button class="btn btn-tertiary" data-close-drawer="drawer-override">Cancel</button>
-    <button class="btn btn-primary" id="override-apply">Apply override</button>
+    <button class="btn btn-sm btn-tertiary" data-close-drawer="drawer-blending-review">Cancel</button>
+    <button class="btn btn-sm btn-primary" id="bc-confirm-save">Confirm &amp; Save</button>
+  </div>
+</div>
+
+<!-- Suspend provider modal -->
+<div class="overlay" id="overlay-suspend">
+  <div class="modal">
+    <div class="modal__header">
+      <div><h3 id="suspend-title">Suspend Provider</h3><p id="suspend-subtitle"></p></div>
+      <span class="close-x" data-close="overlay-suspend"><svg class="ic ic-20" aria-hidden="true"><use href="#ic-x"/></svg></span>
+    </div>
+    <div class="modal__body" id="suspend-body"></div>
+    <div class="modal__footer">
+      <button class="btn btn-tertiary" data-close="overlay-suspend">Cancel</button>
+      <button class="btn btn-destructive" id="suspend-confirm">Confirm Suspend</button>
+    </div>
+  </div>
+</div>
+
+<!-- Set Backup provider modal -->
+<div class="overlay" id="overlay-backup">
+  <div class="modal">
+    <div class="modal__header">
+      <div><h3 id="backup-title">Set Backup Provider</h3><p id="backup-subtitle"></p></div>
+      <span class="close-x" data-close="overlay-backup"><svg class="ic ic-20" aria-hidden="true"><use href="#ic-x"/></svg></span>
+    </div>
+    <div class="modal__body" id="backup-body"></div>
+    <div class="modal__footer">
+      <button class="btn btn-tertiary" data-close="overlay-backup">Cancel</button>
+      <button class="btn btn-primary" id="backup-save">Save Backup</button>
+    </div>
   </div>
 </div>
 
@@ -612,8 +619,8 @@
   <div class="ai-messages" id="docs-body" style="display:block;"></div>
 </div>
 
-<script src="data.js?v=14"></script>
-<script src="docs.js?v=14"></script>
-<script src="app.js?v=14"></script>
+<script src="data.js?v=16"></script>
+<script src="docs.js?v=16"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>
