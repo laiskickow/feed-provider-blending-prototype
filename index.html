@@ -6,7 +6,7 @@
 <title>Feed Provider Blending &amp; Integration Platform</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Murecho:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=18">
+<link rel="stylesheet" href="styles.css?v=19">
 </head>
 <body>
 <!-- ============ SVG SPRITE — Lucide icons, Ivory stroke scale ============ -->
@@ -108,16 +108,20 @@
         </div>
       </div>
 
-      <div class="toolbar">
-        <div id="bc-filter" style="flex:1;min-width:280px;max-width:520px;"></div>
-        <select class="select input-sm" id="bc-provider-filter" style="width:220px;">
-          <option value="">Filter by provider — show all</option>
-        </select>
-        <span class="muted" style="font-size:11px;" id="bc-provider-filter-hint"></span>
-        <div class="toolbar__actions">
+      <div class="filter-card card">
+        <div class="filter-card__grid">
+          <div class="field"><label>Sport</label><div id="bcf-sport"></div></div>
+          <div class="field"><label>Group</label><div id="bcf-group"></div></div>
+          <div class="field"><label>Competition</label><div id="bcf-comp"></div></div>
+          <div class="field"><label>Market</label><div id="bcf-market"></div></div>
+          <div class="field"><label>Provider</label><div id="bcf-provider"></div></div>
+        </div>
+        <div class="filter-card__actions">
           <button class="btn btn-sm btn-tertiary" id="bc-expand-all">Expand all</button>
           <button class="btn btn-sm btn-tertiary" id="bc-collapse-all">Collapse all</button>
           <button class="btn btn-sm btn-tertiary" id="bc-export">Export CSV</button>
+          <span class="filter-card__spacer"></span>
+          <button class="btn btn-sm btn-tertiary" id="bc-clear-filters">Clear Filters</button>
         </div>
       </div>
 
@@ -129,10 +133,10 @@
               <div role="columnheader">Pre-Match</div>
               <div role="columnheader">In-Play</div>
               <div role="columnheader">Secondary</div>
-              <div role="columnheader">Source</div>
+              <div role="columnheader">Config</div>
               <div class="tree-cell--contains" role="columnheader">Contains</div>
               <div class="tree-cell--gth" role="columnheader">GTH</div>
-              <div class="tree-cell--state" role="columnheader">State</div>
+              <div class="tree-cell--actions" role="columnheader">Actions</div>
             </div>
             <div id="hierarchy-tree"></div>
           </div>
@@ -627,8 +631,8 @@
   <div class="ai-messages" id="docs-body" style="display:block;"></div>
 </div>
 
-<script src="data.js?v=18"></script>
-<script src="docs.js?v=18"></script>
-<script src="app.js?v=18"></script>
+<script src="data.js?v=19"></script>
+<script src="docs.js?v=19"></script>
+<script src="app.js?v=19"></script>
 </body>
 </html>

@@ -419,6 +419,13 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
 .ms-empty{padding:var(--sp-2) var(--sp-2);font-size:11px;color:var(--fg-muted);}
 
 .card{background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radii-md);}
+
+/* Blending filter — MCUI-style labeled search card (item 4) */
+.filter-card{padding:var(--sp-4);margin-bottom:var(--sp-3);}
+.filter-card__grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:var(--sp-3);}
+.filter-card__grid .field{margin-bottom:0;}
+.filter-card__actions{display:flex;align-items:center;gap:var(--sp-2);margin-top:var(--sp-3);}
+.filter-card__spacer{flex:1;}
 .card-pad{padding:var(--sp-4);}
 .card-highlight{background:var(--bg-subtle);border-left:3px solid var(--border-info);}
 
@@ -484,28 +491,45 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
 /* Blending tree — 8-column CSS grid, sticky header, depth-indented rows */
 #view-blending-config.active{display:flex;flex-direction:column;height:100%;overflow:hidden;}
 .tree{flex:1;min-height:0;display:flex;flex-direction:column;
-  --tree-cols:minmax(180px,1fr) 136px 136px 136px 72px 80px 32px 72px;
-  --tree-indent:16px;font-size:var(--fs-xs);}
+  --tree-cols:minmax(200px,1fr) 128px 128px 128px 96px 80px 32px 96px;
+  --tree-indent:18px;font-size:var(--fs-xs);}
 .tree-scroll{flex:1;min-height:0;overflow:auto;}
-.tree-inner{min-width:880px;}
+.tree-inner{min-width:940px;}
 .tree.card{background:var(--bg-panel);overflow:hidden;}
 .tree-head,.tree-row{display:grid;grid-template-columns:var(--tree-cols);
   column-gap:var(--sp-2);align-items:center;padding:var(--sp-1_5) var(--sp-3);}
-.tree-head{position:sticky;top:0;background:var(--bg-subtle);
-  border-bottom:var(--bw-sm) solid var(--border);
+/* Header — stronger contrast, matching the Audit-log table (item 1) */
+.tree-head{position:sticky;top:0;background:var(--bg-muted);
+  border-bottom:var(--bw-md) solid var(--border-muted);
   font-size:11px;text-transform:uppercase;letter-spacing:.3px;
-  font-weight:var(--fw-semibold);color:var(--fg-muted);z-index:1;}
+  font-weight:var(--fw-bold);color:var(--fg-title);z-index:1;}
 @media(max-width:1200px){
-  .tree{--tree-cols:minmax(160px,1fr) 130px 130px 130px 64px 32px 64px;}
+  .tree{--tree-cols:minmax(170px,1fr) 120px 120px 120px 90px 32px 88px;}
   .tree-cell--contains{display:none;}
   .tree-head [role="columnheader"]:nth-child(6){display:none;}
 }
-/* Global default row — top of the cascade, visually distinct */
-.tree-row--global{background:var(--bg-muted);border-bottom:2px solid var(--border);font-weight:var(--fw-semibold);}
-.tree-row--global .name{font-weight:var(--fw-bold);}
+/* Read-only provider cells + the Config (Default/Override) column */
+.tree-cell--prov{min-width:0;overflow:hidden;}
+.prov-chip{display:inline-flex;align-items:center;gap:5px;font-weight:var(--fw-medium);color:var(--fg-title);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.prov-chip .swatch{width:7px;height:7px;border-radius:50%;flex:none;}
+.ro-inherit{color:var(--fg-muted);white-space:nowrap;}
+.ro-default{color:var(--fg-subtle);}
+.badge-override{display:inline-flex;align-items:center;font-size:10px;font-weight:var(--fw-bold);
+  letter-spacing:.3px;text-transform:uppercase;color:var(--blue-fg);background:var(--blue-subtle);
+  border:1px solid var(--blue-muted);border-radius:var(--radii-sm);padding:2px 6px;}
+.tree-cell--override{min-width:0;}
+.tree-cell--actions{display:flex;align-items:center;justify-content:flex-end;gap:var(--sp-1);}
+/* Overridden rows — highlight where an Overrides-tab rule takes priority (item 6) */
+.tree-row--overridden:not(.tree-row--pending){box-shadow:inset 3px 0 0 var(--blue-solid);}
+/* Sport rows — the top level, emphasised */
+.tree-row--sport>.tree-row__lead .name{font-weight:var(--fw-bold);color:var(--fg-title);}
 /* Group rows — subtle visual distinction from sport/competition */
-.tree-row--group .name{font-weight:var(--fw-medium);font-style:normal;}
+.tree-row--group .name{font-weight:var(--fw-semibold);font-style:normal;}
 .tree-row--group .tree-row__lead .ic{color:var(--fg-muted);}
+/* "+ Add market" / "+ New group" affordance rows — same look, aligned (item 3) */
+.tree-row--add{color:var(--fg-muted);}
+.tree-row--add:hover .tree-add__label{color:var(--fg-title);}
+.tree-add__label{font-size:var(--fs-xs);font-weight:var(--fw-medium);}
 
 /* Rich hover tooltip for "not mapped to GTH" warnings, with a fix-it link */
 .map-warning{position:relative;display:inline-flex;align-items:center;cursor:help;flex:none;}
@@ -567,11 +591,13 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
 .seg__btn + .seg__btn{border-left:1px solid var(--border);}
 .seg__btn.active{background:var(--gray-solid);color:var(--text-fg-inverted);}
 
-.tree-row{min-height:34px;border-bottom:var(--bw-sm) solid var(--border-subtle);cursor:default;scroll-margin-block-start:36px;}
+/* Rows — clean separators + hover for contrast, matching the Audit-log table (item 1) */
+.tree-row{min-height:36px;border-bottom:var(--bw-sm) solid var(--border-muted);cursor:default;scroll-margin-block-start:36px;}
 .tree-row[data-toggle]{cursor:pointer;}
-.tree-row:hover{background:var(--bg-subtle);}
-.tree-row:nth-child(even):not(.tree-row--global):not(.tree-row--pending){background:var(--bg-muted);}
-.tree-row:nth-child(even):not(.tree-row--global):not(.tree-row--pending):hover{background:var(--bg-subtle);}
+.tree-row:hover{background:var(--bg-muted);}
+/* Sport rows sit slightly raised so top-level boundaries read at a glance */
+.tree-row--sport{background:var(--bg-subtle);}
+.tree-row--sport:hover{background:var(--bg-muted);}
 .tree-row--market{font-size:11px;min-height:30px;}
 .tree-row--market .name{font-weight:var(--fw-normal);color:var(--fg-muted);}
 /* Pending rows: bg tint + inset left accent (box-shadow so it doesn't shift grid columns) */
@@ -718,6 +744,7 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
 /* Ivory icon system — stroke scale: size × 1.5/24 */
 .ic{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;flex:none;}
 .ic-12{width:12px;height:12px;stroke-width:.75;}
+.ic-14{width:14px;height:14px;stroke-width:.9;}
 .ic-16{width:16px;height:16px;stroke-width:1;}
 .ic-20{width:20px;height:20px;stroke-width:1.25;}
 .ic-24{width:24px;height:24px;stroke-width:1.5;}

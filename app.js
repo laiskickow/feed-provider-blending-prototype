@@ -316,7 +316,6 @@ document.getElementById('docs-close').addEventListener('click', ()=> document.ge
    ============================================================ */
 const pendingHierarchy = {};
 const openTreeNodes = new Set();
-let bcProviderFilter = '';
 let bcSuppressAutoExpand = false;
 
 function sourceLabel(src){
@@ -405,42 +404,30 @@ function providerOptionsNullable(selectedId, inheritLabel){
   return html;
 }
 
-function populateProviderFilter(){
-  const sel = document.getElementById('bc-provider-filter');
-  PROVIDERS.forEach(p=> sel.innerHTML += `<option value="${p.id}">${p.name}</option>`);
-  sel.addEventListener('change', function(){
-    bcProviderFilter = this.value;
-    bcSuppressAutoExpand = false;
-    document.getElementById('bc-provider-filter-hint').textContent = bcProviderFilter
-      ? 'Showing only nodes where this provider is the effective provider, expanded.' : '';
-    renderHierarchyTree();
-  });
-}
 
-// --- Blending smart filter (Sport / Group / Competition / Market) --------
-const bcFilters = { sport:new Set(), group:new Set(), comp:new Set(), market:new Set() };
-let bcFilterCtl = null;
+// --- Blending filter — MCUI-style labeled card, live multi-select (item 4) --
+const bcFilters = { sport:new Set(), group:new Set(), comp:new Set(), market:new Set(), provider:new Set() };
+const bcfCtls = {};
 function initBlendingFilter(){
-  const mount = document.getElementById('bc-filter');
-  if (!mount) return;
+  if (!document.getElementById('bcf-sport')) return;
   const markets = [...new Set(SPORTS.flatMap(s=>SPORT_MARKET_TYPES[s.id]||[]))];
-  const options = [
-    ...SPORTS.map(s=>({ value:`sport:${s.id}`, label:s.name, group:'Sport' })),
-    ...GROUPS.map(g=>({ value:`group:${g.id}`, label:g.name, group:'Group' })),
-    ...SPORTS.flatMap(s=>s.competitions).map(c=>({ value:`comp:${c.id}`, label:c.name, group:'Competition' })),
-    ...markets.map(m=>({ value:`market:${m}`, label:m, group:'Market' })),
-  ];
-  bcFilterCtl = createMultiSelect(mount, {
-    options, grouped:true, placeholder:'Filter by sport, group, competition or market…',
-    onChange:(sel)=>{
-      bcFilters.sport.clear(); bcFilters.group.clear(); bcFilters.comp.clear(); bcFilters.market.clear();
-      sel.forEach(v=>{ const i=v.indexOf(':'); bcFilters[v.slice(0,i)]?.add(v.slice(i+1)); });
-      bcSuppressAutoExpand = false;
-      renderHierarchyTree();
-    },
+  const mk = (mountId, opts, key)=> createMultiSelect(document.getElementById(mountId), {
+    options:opts, placeholder:'Any',
+    onChange:(sel)=>{ bcFilters[key] = new Set(sel); bcSuppressAutoExpand = false; renderHierarchyTree(); },
   });
+  bcfCtls.sport    = mk('bcf-sport',    SPORTS.map(s=>({value:s.id,label:s.name})), 'sport');
+  bcfCtls.group    = mk('bcf-group',    GROUPS.map(g=>({value:g.id,label:g.name})), 'group');
+  bcfCtls.comp     = mk('bcf-comp',     SPORTS.flatMap(s=>s.competitions).map(c=>({value:c.id,label:c.name})), 'comp');
+  bcfCtls.market   = mk('bcf-market',   markets.map(m=>({value:m,label:m})), 'market');
+  bcfCtls.provider = mk('bcf-provider', PROVIDERS.map(p=>({value:p.id,label:p.name})), 'provider');
 }
-function bcFilterActive(){ return bcFilters.sport.size||bcFilters.group.size||bcFilters.comp.size||bcFilters.market.size; }
+function clearBlendingFilters(){
+  Object.values(bcFilters).forEach(s=>s.clear());
+  Object.values(bcfCtls).forEach(c=>c.clear && c.clear());
+  bcSuppressAutoExpand = false;
+  renderHierarchyTree();
+}
+function bcFilterActive(){ return Object.values(bcFilters).some(s=>s.size>0); }
 // A market token matches a comp if the comp, its group, or its sport has that
 // market added; sport/group-level "Add market" rows still render in-branch.
 function compMatchesMarketFilter(sport, comp){
@@ -454,7 +441,6 @@ function compMatchesMarketFilter(sport, comp){
 
 // --- Visible tree model (filtered) --------------------------------------
 function visibleTreeModel(){
-  const pf = bcProviderFilter;
   const active = bcFilterActive();
   return SPORTS.flatMap(sport=>{
     const groups = groupsForSport(sport.id);
@@ -462,11 +448,11 @@ function visibleTreeModel(){
       if (bcFilters.sport.size && !bcFilters.sport.has(sport.id)) return false;
       if (bcFilters.comp.size && !bcFilters.comp.has(c.id)) return false;
       if (bcFilters.group.size && !groups.some(g=>bcFilters.group.has(g.id) && g.competitions.includes(c.id))) return false;
+      if (bcFilters.provider.size && !compEffectiveProviders(sport, c).some(p=>bcFilters.provider.has(p))) return false;
       if (!compMatchesMarketFilter(sport, c)) return false;
       return true;
     });
-    if (pf) visibleComps = visibleComps.filter(comp=> compEffectiveProviders(sport, comp).includes(pf));
-    if ((active || pf) && visibleComps.length===0) return [];
+    if (active && visibleComps.length===0) return [];
     const visibleGroups = groups.map(g=>({
       group: g,
       comps: visibleComps.filter(c=> g.competitions.includes(c.id))
@@ -537,7 +523,6 @@ function nodeEffectiveProvider(level, id, sportId, phase){
 // Market-override child rows + the "+ Add market" line for a Sport/Group/Comp node.
 function renderMarketRows(level, id, sportId, depth){
   const prefix = `${level}:${id}:`;
-  const label = level==='comp' ? '↑ Comp' : level==='group' ? '↑ Group' : '↑ Sport';
   const mts = [...addedMarkets].filter(k=>k.startsWith(prefix)).map(k=>k.slice(prefix.length));
   const rows = mts.map(mt=>{
     const base = `${level}:${id}:${mt}`;
@@ -546,47 +531,85 @@ function renderMarketRows(level, id, sportId, depth){
     const inp = pendingOr(inpKey, MARKET_TYPE_DEFAULTS[base]?.inplay ?? null);
     const pending = [preKey,inpKey].some(k=>k in pendingHierarchy);
     const safeMt = mt.replace(/'/g,'&#39;');
+    const editKey = `mkt:${base}`, editing = editingNodes.has(editKey);
+    const overridden = marketNodeOverridden(sportId, mt);
+    const inhPre = nodeEffectiveProvider(level,id,sportId,'prematch');
+    const inhInp = nodeEffectiveProvider(level,id,sportId,'inplay');
+    const remove = `<button class="icon-btn" onclick="event.stopPropagation();removeMarketRow('${level}','${id}','${safeMt}')" title="Remove market">${ic('trash-2',14)}</button>`;
     return `
-      <div class="tree-row tree-row--market ${pending?'tree-row--pending':''}" style="--depth:${depth}" role="row" aria-level="${depth}">
+      <div class="tree-row tree-row--market ${pending?'tree-row--pending':''} ${overridden?'tree-row--overridden':''}" style="--depth:${depth}" role="row" aria-level="${depth}">
         <div class="tree-row__lead">
           <span class="ic ic-16" style="width:12px"></span>
           <span class="ic ic-16" style="width:12px"></span>
           <span class="name">${mt}</span>
         </div>
-        <select class="select input-sm" style="width:100%" data-key="${preKey}">
-          ${providerOptions(pre, true, inheritLabel(nodeEffectiveProvider(level,id,sportId,'prematch')))}
-        </select>
-        <select class="select input-sm" style="width:100%" data-key="${inpKey}">
-          ${providerOptions(inp, true, inheritLabel(nodeEffectiveProvider(level,id,sportId,'inplay')))}
-        </select>
-        <div></div>
-        <div class="tree-cell--source">${pre||inp?'Explicit':label}</div>
+        ${editing ? `
+          <select class="select input-sm" style="width:100%" data-key="${preKey}">${providerOptions(pre, true, inheritLabel(inhPre))}</select>
+          <select class="select input-sm" style="width:100%" data-key="${inpKey}">${providerOptions(inp, true, inheritLabel(inhInp))}</select>
+          <div></div>`
+        : `
+          <div class="tree-cell--prov">${roProvider(pre||inhPre, !!pre)}</div>
+          <div class="tree-cell--prov">${roProvider(inp||inhInp, !!inp)}</div>
+          <div></div>`}
+        <div class="tree-cell--override">${overrideCell(overridden)}</div>
         <div class="tree-cell--contains"></div>
         <div class="tree-cell--gth"></div>
-        <div class="tree-cell--state">
-          ${pending?'<span class="badge badge-yellow">unsaved</span>':''}
-          <button class="icon-btn" style="width:18px;height:18px;" onclick="event.stopPropagation();removeMarketRow('${level}','${id}','${safeMt}')" title="Remove market">${ic('trash-2',12)}</button>
-        </div>
+        ${actionsCell(editKey, pending, remove)}
       </div>`;
   }).join('');
   const addLine = `
-    <div class="tree-row" style="--depth:${depth};cursor:pointer;color:var(--fg-muted);" onclick="event.stopPropagation();addMarketRow('${level}','${id}','${sportId}')">
+    <div class="tree-row tree-row--add" style="--depth:${depth};cursor:pointer;" onclick="event.stopPropagation();addMarketRow('${level}','${id}','${sportId}')">
       <div class="tree-row__lead">
         <span class="ic ic-16" style="width:12px"></span>
-        <span class="ic ic-16" style="width:12px"></span>
         ${ic('plus', 16, 'style="color:var(--fg-muted)"')}
-        <span style="font-size:var(--fs-xs);">Add market</span>
+        <span class="tree-add__label">Add market</span>
       </div>
       <div></div><div></div><div></div><div></div><div></div><div></div><div></div>
     </div>`;
   return rows + addLine;
 }
 
+// Inline-edit state — nodes whose provider cells are currently editable (item 2).
+const editingNodes = new Set();
+function toggleNodeEdit(key){ editingNodes.has(key) ? editingNodes.delete(key) : editingNodes.add(key); renderHierarchyTree(); }
+
+// Does an Event Overrides-tab rule take priority at this node? (item 6)
+function competitionOverridden(compId){
+  return EVENT_OVERRIDES.some(o=>
+    (o.scope==='competition' && o.competitionId===compId) ||
+    (o.scope==='market' && o.competitionId===compId) ||
+    (o.scope==='event' && EVENTS.find(e=>e.id===o.eventId)?.competition===compId));
+}
+function marketNodeOverridden(sportId, mt){
+  return EVENT_OVERRIDES.some(o=> o.scope==='market' && o.marketType===mt && o.sportId===sportId);
+}
+function overrideCell(overridden){
+  return overridden
+    ? `<span class="badge-override" title="An Overrides-tab rule takes priority here">Override</span>`
+    : `<span class="ro-default">Default</span>`;
+}
+// Read-only provider display — solid chip if set at this node, muted "↑ name" if inherited (items 2/5).
+function roProvider(value, explicit){
+  if (!value) return `<span class="ro-default">—</span>`;
+  const p = providerById(value); const name = p?.name || value;
+  return explicit
+    ? `<span class="prov-chip"><span class="swatch" style="background:${p?.color}"></span>${name}</span>`
+    : `<span class="ro-inherit">↑ ${name}</span>`;
+}
+// Actions cell — pending badge + inline-edit toggle (+ optional extra buttons).
+function actionsCell(editKey, pending, extra=''){
+  const editing = editingNodes.has(editKey);
+  return `<div class="tree-cell--actions">
+    ${pending?'<span class="badge badge-yellow">unsaved</span>':''}
+    ${extra}
+    <button class="icon-btn" onclick="event.stopPropagation();toggleNodeEdit('${editKey}')" title="${editing?'Done editing':'Edit providers'}">${editing?ic('check',14):ic('square-pen',14)}</button>
+  </div>`;
+}
+
 function renderHierarchyTree(){
   const root = document.getElementById('hierarchy-tree');
-  const pf = bcProviderFilter;
   const model = visibleTreeModel();
-  const autoExpand = (bcFilterActive() || !!pf) && !bcSuppressAutoExpand;
+  const autoExpand = bcFilterActive() && !bcSuppressAutoExpand;
 
   // Global Default is no longer an editable row (Sport is the top level); the
   // GLOBAL_DEFAULT value stays a silent fallback in the resolver.
@@ -610,34 +633,32 @@ function renderHierarchyTree(){
       const parentPre = parentProviderForComp(sport, group, 'prematch');
       const parentInp = parentProviderForComp(sport, group, 'inplay');
       const parentSec = parentSecondaryForComp(sport, group);
-      const bestSource = [effPre.source, effInp.source].includes('own') ? 'Explicit'
-        : [effPre.source, effInp.source].includes('group') ? '↑ Group'
-        : [effPre.source, effInp.source].includes('sport') ? '↑ Sport' : '↑ Global';
-
+      const editKey = `comp:${comp.id}`, editing = editingNodes.has(editKey);
+      const overridden = competitionOverridden(comp.id);
       const compOpen = openTreeNodes.has('comp-'+comp.id) || autoExpand;
+      const gth = !preMapped?mapWarningHtml(effPre.value, sport.id, comp.id, 'prematch'):(!inpMapped?mapWarningHtml(effInp.value, sport.id, comp.id, 'inplay'):'');
 
       return `
       <div class="tree-node">
-        <div class="tree-row ${compOpen?'open':''} ${compPending?'tree-row--pending':''}"
+        <div class="tree-row ${compOpen?'open':''} ${compPending?'tree-row--pending':''} ${overridden?'tree-row--overridden':''}"
              data-toggle="comp-${comp.id}" style="--depth:${depth}"
              role="row" aria-level="${depth}" aria-expanded="${compOpen}">
           <div class="tree-row__lead">
             ${ICONS.chevron()}${ICONS.competitionIcon()}
             <span class="name" title="${comp.name}">${comp.name}</span>
           </div>
-          <select class="select input-sm" style="width:100%" data-key="comp:${comp.id}:prematch">
-            ${providerOptions(compPre, true, inheritLabel(parentPre))}
-          </select>
-          <select class="select input-sm" style="width:100%" data-key="comp:${comp.id}:inplay">
-            ${providerOptions(compInp, true, inheritLabel(parentInp))}
-          </select>
-          <select class="select input-sm" style="width:100%" data-key="secondary:comp:${comp.id}">
-            ${providerOptionsNullable(compSec, `Inherit · ${providerById(parentSec)?.name||'none'}`)}
-          </select>
-          <div class="tree-cell--source">${bestSource}</div>
+          ${editing ? `
+            <select class="select input-sm" style="width:100%" data-key="comp:${comp.id}:prematch">${providerOptions(compPre, true, inheritLabel(parentPre))}</select>
+            <select class="select input-sm" style="width:100%" data-key="comp:${comp.id}:inplay">${providerOptions(compInp, true, inheritLabel(parentInp))}</select>
+            <select class="select input-sm" style="width:100%" data-key="secondary:comp:${comp.id}">${providerOptionsNullable(compSec, `Inherit · ${providerById(parentSec)?.name||'none'}`)}</select>`
+          : `
+            <div class="tree-cell--prov">${roProvider(effPre.value, effPre.source==='own')}</div>
+            <div class="tree-cell--prov">${roProvider(effInp.value, effInp.source==='own')}</div>
+            <div class="tree-cell--prov">${roProvider(compSec||parentSec, !!compSec)}</div>`}
+          <div class="tree-cell--override">${overrideCell(overridden)}</div>
           <div class="tree-cell--contains">${comp.events} event${comp.events===1?'':'s'}</div>
-          <div class="tree-cell--gth">${!preMapped?mapWarningHtml(effPre.value, sport.id, comp.id, 'prematch'):(!inpMapped?mapWarningHtml(effInp.value, sport.id, comp.id, 'inplay'):'')}</div>
-          <div class="tree-cell--state">${compPending?'<span class="badge badge-yellow">unsaved</span>':''}</div>
+          <div class="tree-cell--gth">${gth}</div>
+          ${actionsCell(editKey, compPending)}
         </div>
         <div class="tree-children ${compOpen?'open':''}" id="comp-${comp.id}">${renderMarketRows('comp', comp.id, sport.id, depth+1)}</div>
       </div>`;
@@ -654,29 +675,31 @@ function renderHierarchyTree(){
       const parentSec = parentSecondaryForGroup(sport);
       const effSrc = [grpPre?'own':null, grpInp?'own':null].some(Boolean) ? 'Explicit' : '↑ Sport';
 
+      const editKey = `group:${group.id}`, editing = editingNodes.has(editKey);
+      const overridden = comps.some(c=>competitionOverridden(c.id));
+      const grpEdit = `<button class="icon-btn" onclick="event.stopPropagation();openGroupDrawer('${group.id}')" title="Edit group name / members">${ic('layers',14)}</button>`;
+
       return `
       <div class="tree-node">
-        <div class="tree-row tree-row--group ${grpOpen?'open':''} ${grpPending?'tree-row--pending':''}"
+        <div class="tree-row tree-row--group ${grpOpen?'open':''} ${grpPending?'tree-row--pending':''} ${overridden?'tree-row--overridden':''}"
              data-toggle="group-${group.id}" style="--depth:2"
              role="row" aria-level="2" aria-expanded="${grpOpen}">
           <div class="tree-row__lead">
             ${ICONS.chevron()}${ic('layers', 16, 'style="color:var(--fg-muted)"')}
             <span class="name" title="${group.name}">${group.name}</span>
-            <span class="icon-btn" style="width:20px;height:20px;margin-left:2px;" onclick="event.stopPropagation();openGroupDrawer('${group.id}')" title="Edit group">${ICONS.edit()}</span>
           </div>
-          <select class="select input-sm" style="width:100%" data-key="group:${group.id}:prematch">
-            ${providerOptions(grpPre, true, inheritLabel(parentPre))}
-          </select>
-          <select class="select input-sm" style="width:100%" data-key="group:${group.id}:inplay">
-            ${providerOptions(grpInp, true, inheritLabel(parentInp))}
-          </select>
-          <select class="select input-sm" style="width:100%" data-key="secondary:group:${group.id}">
-            ${providerOptionsNullable(grpSec, `Inherit · ${providerById(parentSec)?.name||'none'}`)}
-          </select>
-          <div class="tree-cell--source">${effSrc}</div>
+          ${editing ? `
+            <select class="select input-sm" style="width:100%" data-key="group:${group.id}:prematch">${providerOptions(grpPre, true, inheritLabel(parentPre))}</select>
+            <select class="select input-sm" style="width:100%" data-key="group:${group.id}:inplay">${providerOptions(grpInp, true, inheritLabel(parentInp))}</select>
+            <select class="select input-sm" style="width:100%" data-key="secondary:group:${group.id}">${providerOptionsNullable(grpSec, `Inherit · ${providerById(parentSec)?.name||'none'}`)}</select>`
+          : `
+            <div class="tree-cell--prov">${roProvider(grpPre||parentPre, !!grpPre)}</div>
+            <div class="tree-cell--prov">${roProvider(grpInp||parentInp, !!grpInp)}</div>
+            <div class="tree-cell--prov">${roProvider(grpSec||parentSec, !!grpSec)}</div>`}
+          <div class="tree-cell--override">${overrideCell(overridden)}</div>
           <div class="tree-cell--contains">${comps.length} comp${comps.length===1?'':'s'}</div>
           <div class="tree-cell--gth"></div>
-          <div class="tree-cell--state">${grpPending?'<span class="badge badge-yellow">unsaved</span>':''}</div>
+          ${actionsCell(editKey, grpPending, grpEdit)}
         </div>
         <div class="tree-children ${grpOpen?'open':''}" id="group-${group.id}">
           ${comps.map(c=>renderComp(c, group, 3)).join('')}
@@ -687,37 +710,43 @@ function renderHierarchyTree(){
 
     const ungroupedHtml = ungrouped.map(c=>renderComp(c, null, 2)).join('');
 
+    const sportEditKey = `sport:${sport.id}`, sportEditing = editingNodes.has(sportEditKey);
+    const globalPre = pendingOr('global:prematch', GLOBAL_DEFAULT.prematch);
+    const globalInp = pendingOr('global:inplay', GLOBAL_DEFAULT.inplay);
+    const globalSec = pendingOr('secondary:global', GLOBAL_DEFAULT.secondary);
+    const sportOverridden = sport.competitions.some(c=>competitionOverridden(c.id))
+      || EVENT_OVERRIDES.some(o=>o.scope==='market' && o.competitionId==null && o.sportId===sport.id);
+
     return `
     <div class="tree-node">
-      <div class="tree-row ${sportOpen?'open':''} ${sportPending?'tree-row--pending':''}"
+      <div class="tree-row tree-row--sport ${sportOpen?'open':''} ${sportPending?'tree-row--pending':''} ${sportOverridden?'tree-row--overridden':''}"
            data-toggle="sport-${sport.id}" style="--depth:1"
            role="row" aria-level="1" aria-expanded="${sportOpen}">
         <div class="tree-row__lead">
           ${ICONS.chevron()}${ICONS.sportIcon()}
           <span class="name" title="${sport.name}">${sport.name}</span>
         </div>
-        <select class="select input-sm" style="width:100%" data-key="sport:${sport.id}:prematch">
-          ${providerOptions(sportPre, true, inheritLabel(pendingOr('global:prematch', GLOBAL_DEFAULT.prematch)))}
-        </select>
-        <select class="select input-sm" style="width:100%" data-key="sport:${sport.id}:inplay">
-          ${providerOptions(sportInp, true, inheritLabel(pendingOr('global:inplay', GLOBAL_DEFAULT.inplay)))}
-        </select>
-        <select class="select input-sm" style="width:100%" data-key="secondary:sport:${sport.id}">
-          ${providerOptionsNullable(sportSec, `Inherit · ${providerById(pendingOr('secondary:global', GLOBAL_DEFAULT.secondary))?.name||'none'}`)}
-        </select>
-        <div class="tree-cell--source"></div>
+        ${sportEditing ? `
+          <select class="select input-sm" style="width:100%" data-key="sport:${sport.id}:prematch">${providerOptions(sportPre, true, inheritLabel(globalPre))}</select>
+          <select class="select input-sm" style="width:100%" data-key="sport:${sport.id}:inplay">${providerOptions(sportInp, true, inheritLabel(globalInp))}</select>
+          <select class="select input-sm" style="width:100%" data-key="secondary:sport:${sport.id}">${providerOptionsNullable(sportSec, `Inherit · ${providerById(globalSec)?.name||'none'}`)}</select>`
+        : `
+          <div class="tree-cell--prov">${roProvider(sportPre||globalPre, !!sportPre)}</div>
+          <div class="tree-cell--prov">${roProvider(sportInp||globalInp, !!sportInp)}</div>
+          <div class="tree-cell--prov">${roProvider(sportSec||globalSec, !!sportSec)}</div>`}
+        <div class="tree-cell--override">${overrideCell(sportOverridden)}</div>
         <div class="tree-cell--contains">${totalComps} comp${totalComps===1?'':'s'}</div>
         <div class="tree-cell--gth"></div>
-        <div class="tree-cell--state">${sportPending?'<span class="badge badge-yellow">unsaved</span>':''}</div>
+        ${actionsCell(sportEditKey, sportPending)}
       </div>
       <div class="tree-children ${sportOpen?'open':''}" id="sport-${sport.id}">
         ${groupsHtml}${ungroupedHtml}
         ${renderMarketRows('sport', sport.id, sport.id, 2)}
-        <div class="tree-row" style="--depth:2;cursor:pointer;color:var(--fg-muted);" onclick="createNewGroup('${sport.id}')">
+        <div class="tree-row tree-row--add" style="--depth:2;cursor:pointer;" onclick="createNewGroup('${sport.id}')">
           <div class="tree-row__lead">
             <span class="ic ic-16" style="width:12px"></span>
             ${ic('plus', 16, 'style="color:var(--fg-muted)"')}
-            <span style="font-size:var(--fs-xs);">New group</span>
+            <span class="tree-add__label">New group</span>
           </div>
           <div></div><div></div><div></div><div></div><div></div><div></div><div></div>
         </div>
@@ -801,6 +830,7 @@ function updatePendingBar(){
 }
 document.getElementById('bc-discard').addEventListener('click', ()=>{
   for (const k in pendingHierarchy) delete pendingHierarchy[k];
+  editingNodes.clear();
   renderHierarchyTree();
 });
 document.getElementById('bc-expand-all').addEventListener('click', ()=>{
@@ -816,6 +846,7 @@ document.getElementById('bc-collapse-all').addEventListener('click', ()=>{
   bcSuppressAutoExpand = true;
   renderHierarchyTree();
 });
+document.getElementById('bc-clear-filters').addEventListener('click', clearBlendingFilters);
 document.getElementById('bc-export').addEventListener('click', ()=>{
   const headers = ['Sport','Group','Competition','Phase','Primary Provider','Source','Secondary','GTH Mapped'];
   const rows = [];
@@ -929,6 +960,7 @@ function commitBlendingChanges(){
     }
   });
   Object.keys(pendingHierarchy).forEach(k=>delete pendingHierarchy[k]);
+  editingNodes.clear();
   renderHierarchyTree();
   toast('success', 'Configuration saved', `${count} level(s) updated.`);
 }
@@ -2338,7 +2370,6 @@ document.getElementById('ai-suggestions').innerHTML = AI_SUGGESTIONS.map(s=>`<sp
    ============================================================ */
 function init(){
   aiSay(`Hi — I can configure providers or answer questions in plain language. Try: "Set BetRadar as default for Tennis" (Journey 6 from the PRD) or one of the suggestions below.`);
-  populateProviderFilter();
   initBlendingFilter();
   populateOverrideFilters();
   renderHierarchyTree();
