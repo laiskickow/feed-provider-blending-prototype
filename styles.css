@@ -498,11 +498,20 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
 .tree.card{background:var(--bg-panel);overflow:hidden;}
 .tree-head,.tree-row{display:grid;grid-template-columns:var(--tree-cols);
   column-gap:var(--sp-2);align-items:center;padding:var(--sp-1_5) var(--sp-3);}
-/* Header — stronger contrast, matching the Audit-log table (item 1) */
-.tree-head{position:sticky;top:0;background:var(--bg-muted);
-  border-bottom:var(--bw-md) solid var(--border-muted);
+/* Tree toolbar — title + icon actions above the grid */
+.tree-toolbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:var(--sp-2) var(--sp-3);border-bottom:1px solid var(--border);
+  background:var(--bg-panel);
+}
+.tree-toolbar__title{font-size:var(--fs-xs);font-weight:var(--fw-bold);color:var(--fg-title);text-transform:uppercase;letter-spacing:.4px;}
+.tree-toolbar__actions{display:flex;align-items:center;gap:var(--sp-1);}
+/* Header — white bg, taller, clean separator */
+.tree-head{position:sticky;top:0;background:var(--bg-panel);
+  border-bottom:var(--bw-md) solid var(--border);
   font-size:11px;text-transform:uppercase;letter-spacing:.3px;
-  font-weight:var(--fw-bold);color:var(--fg-title);z-index:1;}
+  font-weight:var(--fw-bold);color:var(--fg-muted);z-index:1;
+  min-height:36px;}
 @media(max-width:1200px){
   .tree{--tree-cols:minmax(170px,1fr) 120px 120px 120px 90px 32px 88px;}
   .tree-cell--contains{display:none;}
@@ -526,10 +535,16 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
 /* Group rows — subtle visual distinction from sport/competition */
 .tree-row--group .name{font-weight:var(--fw-semibold);font-style:normal;}
 .tree-row--group .tree-row__lead .ic{color:var(--fg-muted);}
-/* "+ Add market" / "+ New group" affordance rows — same look, aligned (item 3) */
-.tree-row--add{color:var(--fg-muted);}
-.tree-row--add:hover .tree-add__label{color:var(--fg-title);}
-.tree-add__label{font-size:var(--fs-xs);font-weight:var(--fw-medium);}
+/* "+ Add market" / "+ New group" affordance rows — dashed border style */
+.tree-row--add{color:var(--blue-fg);border-bottom:none !important;background:transparent !important;}
+.tree-row--add:hover{background:transparent !important;}
+.tree-row--add .tree-row__lead{
+  border:2px dashed var(--blue-muted);border-radius:var(--radii-md);
+  padding:var(--sp-1_5) var(--sp-3);margin:var(--sp-1) 0;
+  justify-content:center;grid-column:1/-1;
+}
+.tree-row--add:hover .tree-row__lead{border-color:var(--blue-solid);background:var(--blue-subtle);}
+.tree-add__label{font-size:var(--fs-xs);font-weight:var(--fw-semibold);color:var(--blue-fg);}
 
 /* Rich hover tooltip for "not mapped to GTH" warnings, with a fix-it link */
 .map-warning{position:relative;display:inline-flex;align-items:center;cursor:help;flex:none;}
@@ -782,6 +797,15 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
 .gaps-table td{padding:var(--sp-2) var(--sp-3);border-bottom:var(--bw-sm) solid var(--border-subtle);}
 .gaps-table tr:nth-child(even){background:var(--bg-muted);}
 .gaps-table tr:hover{background:var(--bg-subtle);}
+
+/* Log table toolbar — full-width subtitle bar inside audit/system log cards */
+.log-table-toolbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:var(--sp-2) var(--sp-3);border-bottom:1px solid var(--border);
+  background:var(--bg-panel);
+}
+.log-table-toolbar__title{font-size:var(--fs-xs);font-weight:var(--fw-bold);color:var(--fg-title);text-transform:uppercase;letter-spacing:.4px;}
+.log-table-toolbar__count{font-size:var(--fs-xs);color:var(--fg-muted);}
 
 /* ============================================================
    PROVIDER DASHBOARD (merged Health + Coverage)

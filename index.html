@@ -6,7 +6,7 @@
 <title>Feed Provider Blending &amp; Integration Platform</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Murecho:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=19">
+<link rel="stylesheet" href="styles.css?v=20">
 </head>
 <body>
 <!-- ============ SVG SPRITE — Lucide icons, Ivory stroke scale ============ -->
@@ -22,6 +22,10 @@
   <symbol id="ic-history" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></symbol>
   <symbol id="ic-book-open" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></symbol>
   <symbol id="ic-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></symbol>
+  <symbol id="ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></symbol>
+  <symbol id="ic-chevrons-down" viewBox="0 0 24 24"><path d="M7 13l5 5 5-5M7 6l5 5 5-5"/></symbol>
+  <symbol id="ic-chevrons-up" viewBox="0 0 24 24"><path d="M17 18l-5-5-5 5M17 11l-5-5-5 5"/></symbol>
+  <symbol id="ic-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
   <symbol id="ic-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></symbol>
   <symbol id="ic-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
   <symbol id="ic-x" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></symbol>
@@ -81,12 +85,12 @@
     </button>
     <span class="tabs-spacer"></span>
     <div class="tabs-actions">
-      <button type="button" class="icon-btn" id="theme-toggle" aria-label="Toggle light/dark mode">
-        <svg class="ic ic-16" aria-hidden="true"><use href="#ic-moon"/></svg>
-      </button>
       <button type="button" class="icon-btn" id="notif-btn" aria-label="Unmapped items">
         <svg class="ic ic-16" aria-hidden="true"><use href="#ic-bell"/></svg>
         <span class="badge-count" id="unmapped-count">5</span>
+      </button>
+      <button type="button" class="icon-btn" id="theme-toggle" aria-label="Toggle light/dark mode">
+        <svg class="ic ic-16" aria-hidden="true"><use href="#ic-sun"/></svg>
       </button>
       <button type="button" class="icon-btn" id="docs-btn" aria-label="Documentation">
         <svg class="ic ic-16" aria-hidden="true"><use href="#ic-book-open"/></svg>
@@ -117,15 +121,26 @@
           <div class="field"><label>Provider</label><div id="bcf-provider"></div></div>
         </div>
         <div class="filter-card__actions">
-          <button class="btn btn-sm btn-tertiary" id="bc-expand-all">Expand all</button>
-          <button class="btn btn-sm btn-tertiary" id="bc-collapse-all">Collapse all</button>
-          <button class="btn btn-sm btn-tertiary" id="bc-export">Export CSV</button>
           <span class="filter-card__spacer"></span>
           <button class="btn btn-sm btn-tertiary" id="bc-clear-filters">Clear Filters</button>
         </div>
       </div>
 
       <div class="tree card" role="treegrid" aria-label="Provider blending hierarchy">
+        <div class="tree-toolbar">
+          <span class="tree-toolbar__title">Provider hierarchy</span>
+          <div class="tree-toolbar__actions">
+            <button class="icon-btn" id="bc-expand-all" title="Expand all">
+              <svg class="ic ic-16" aria-hidden="true"><use href="#ic-chevrons-down"/></svg>
+            </button>
+            <button class="icon-btn" id="bc-collapse-all" title="Collapse all">
+              <svg class="ic ic-16" aria-hidden="true"><use href="#ic-chevrons-up"/></svg>
+            </button>
+            <button class="icon-btn" id="bc-export" title="Export CSV">
+              <svg class="ic ic-16" aria-hidden="true"><use href="#ic-download"/></svg>
+            </button>
+          </div>
+        </div>
         <div class="tree-scroll">
           <div class="tree-inner">
             <div class="tree-head" role="row">
@@ -222,6 +237,16 @@
         <div class="toolbar">
           <div class="flex-gap-2" id="an-provider-filter" style="flex-wrap:wrap;"></div>
           <div class="toolbar__actions">
+            <select class="select input-sm" id="an-sport" style="width:160px;">
+              <option value="">All sports</option>
+            </select>
+            <select class="select input-sm" id="an-brand" style="width:160px;">
+              <option value="">All brands</option>
+              <option value="paddypower">Paddy Power</option>
+              <option value="betfair">Betfair</option>
+              <option value="fanduel">FanDuel</option>
+              <option value="sportsbet">Sportsbet</option>
+            </select>
             <select class="select input-sm" id="an-range" style="width:150px;">
               <option value="7">Last 7 days</option>
               <option value="30" selected>Last 30 days</option>
@@ -360,17 +385,22 @@
             <option>Provider Mappings</option>
           </select>
           <div class="toolbar__actions">
-            <button class="btn btn-sm btn-tertiary" id="al-export">Export CSV</button>
+            <button class="icon-btn" id="al-export" title="Export CSV">
+              <svg class="ic ic-16" aria-hidden="true"><use href="#ic-download"/></svg>
+            </button>
           </div>
         </div>
         <div class="card">
+          <div class="log-table-toolbar">
+            <span class="log-table-toolbar__title">Trader log</span>
+            <span class="log-table-toolbar__count"><strong id="al-count">0</strong> entries</span>
+          </div>
           <div style="overflow:auto;max-height:560px;">
             <table class="data-table">
               <thead><tr><th>Timestamp</th><th>User</th><th>Area</th><th>Action</th><th>Detail</th></tr></thead>
               <tbody id="audit-tbody"></tbody>
             </table>
           </div>
-          <div class="tbl-foot"><span><strong id="al-count">0</strong> entries</span></div>
         </div>
       </div>
 
@@ -388,10 +418,16 @@
           </select>
           <input class="input input-sm" id="log-filter-text" placeholder="Search sport, competition, description…" style="width:260px;">
           <div class="toolbar__actions">
-            <button class="btn btn-sm btn-tertiary" id="log-export">Export CSV</button>
+            <button class="icon-btn" id="log-export" title="Export CSV">
+              <svg class="ic ic-16" aria-hidden="true"><use href="#ic-download"/></svg>
+            </button>
           </div>
         </div>
         <div class="card">
+          <div class="log-table-toolbar">
+            <span class="log-table-toolbar__title">System log</span>
+            <span class="log-table-toolbar__count" id="sys-log-count"></span>
+          </div>
           <div style="overflow:auto;max-height:560px;">
             <table class="data-table">
               <thead><tr><th>Timestamp</th><th>Type</th><th>Provider</th><th>Sport · Competition</th><th>Description</th></tr></thead>
@@ -631,8 +667,8 @@
   <div class="ai-messages" id="docs-body" style="display:block;"></div>
 </div>
 
-<script src="data.js?v=19"></script>
-<script src="docs.js?v=19"></script>
-<script src="app.js?v=19"></script>
+<script src="data.js?v=20"></script>
+<script src="docs.js?v=20"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>

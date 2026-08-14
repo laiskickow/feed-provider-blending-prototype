@@ -299,7 +299,9 @@ document.getElementById('theme-toggle').addEventListener('click', ()=>{
   const html = document.documentElement;
   const next = html.dataset.theme === 'dark' ? 'light' : 'dark';
   html.dataset.theme = next;
-  renderRevenueChart(); renderBetsChart(); // re-render svg charts w/ theme-aware colors
+  const btn = document.getElementById('theme-toggle');
+  btn.querySelector('use').setAttribute('href', next === 'dark' ? '#ic-moon' : '#ic-sun');
+  renderRevenueChart(); renderBetsChart();
 });
 
 document.getElementById('notif-btn').addEventListener('click', ()=> goToView('mappings'));
@@ -558,13 +560,11 @@ function renderMarketRows(level, id, sportId, depth){
       </div>`;
   }).join('');
   const addLine = `
-    <div class="tree-row tree-row--add" style="--depth:${depth};cursor:pointer;" onclick="event.stopPropagation();addMarketRow('${level}','${id}','${sportId}')">
-      <div class="tree-row__lead">
-        <span class="ic ic-16" style="width:12px"></span>
-        ${ic('plus', 16, 'style="color:var(--fg-muted)"')}
+    <div class="tree-row tree-row--add" style="--depth:${depth};cursor:pointer;display:block;padding:0 var(--sp-3);" onclick="event.stopPropagation();addMarketRow('${level}','${id}','${sportId}')">
+      <div class="tree-row__lead" style="padding-inline-start:calc((${depth} - 1) * var(--tree-indent));">
+        ${ic('plus', 16)}
         <span class="tree-add__label">Add market</span>
       </div>
-      <div></div><div></div><div></div><div></div><div></div><div></div><div></div>
     </div>`;
   return rows + addLine;
 }
@@ -742,13 +742,11 @@ function renderHierarchyTree(){
       <div class="tree-children ${sportOpen?'open':''}" id="sport-${sport.id}">
         ${groupsHtml}${ungroupedHtml}
         ${renderMarketRows('sport', sport.id, sport.id, 2)}
-        <div class="tree-row tree-row--add" style="--depth:2;cursor:pointer;" onclick="createNewGroup('${sport.id}')">
-          <div class="tree-row__lead">
-            <span class="ic ic-16" style="width:12px"></span>
-            ${ic('plus', 16, 'style="color:var(--fg-muted)"')}
+        <div class="tree-row tree-row--add" style="--depth:2;cursor:pointer;display:block;padding:0 var(--sp-3);" onclick="createNewGroup('${sport.id}')">
+          <div class="tree-row__lead" style="padding-inline-start:calc(1 * var(--tree-indent));">
+            ${ic('plus', 16)}
             <span class="tree-add__label">New group</span>
           </div>
-          <div></div><div></div><div></div><div></div><div></div><div></div><div></div>
         </div>
       </div>
     </div>`;
@@ -1527,6 +1525,8 @@ function renderAutomationLog(){
     (!type || a.type===type) &&
     (!text || a.text.toLowerCase().includes(text) || a.competition.toLowerCase().includes(text) || sportName(a.sport).toLowerCase().includes(text))
   ).sort((a,b)=>new Date(b.ts)-new Date(a.ts));
+  const countEl = document.getElementById('sys-log-count');
+  if (countEl) countEl.innerHTML = `<strong>${rows.length}</strong> entries`;
   document.getElementById('automation-log-list').innerHTML = rows.map(a=>{
     const [cls,label] = typeMap[a.type];
     return `<tr>
@@ -2176,6 +2176,12 @@ function renderBetsChart(){
   });
   el.innerHTML = svg;
 }
+function initAnalyticsFilters(){
+  const sportSel = document.getElementById('an-sport');
+  SPORTS.forEach(s=> sportSel.innerHTML += `<option value="${s.id}">${s.name}</option>`);
+  sportSel.addEventListener('change', ()=> toast('default','Filter applied',`Sport: ${sportSel.value||'All'} — analytics data is mocked, filter is cosmetic in this prototype.`));
+  document.getElementById('an-brand').addEventListener('change', function(){ toast('default','Filter applied',`Brand: ${this.value||'All'} — analytics data is mocked, filter is cosmetic in this prototype.`); });
+}
 function renderAnalytics(){ renderKpiRow(); renderAnTable(); renderRevenueChart(); renderBetsChart(); }
 document.getElementById('an-compare').addEventListener('click', function(){
   compareMode = !compareMode;
@@ -2379,6 +2385,7 @@ function init(){
   renderProviderStatusPanel();
   refreshAllMappingTabs();
   renderProviderFilterChips();
+  initAnalyticsFilters();
   renderAnalytics();
   renderAuditLog();
   goToView('blending-config');
