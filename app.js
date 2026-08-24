@@ -498,10 +498,7 @@ function treeRowSelects(keys, values, inheritLabels, isPendingArr){
   return ['prematch','inplay'].map((phase,i)=>`
     <select class="select input-sm" style="width:100%" data-key="${keys[phase]}">
       ${providerOptions(values[phase], !!inheritLabels, inheritLabels?.[phase])}
-    </select>`).join('') + `
-    <select class="select input-sm" style="width:100%" data-key="${keys.secondary}">
-      ${providerOptionsNullable(values.secondary, inheritLabels ? `None · ${providerById(inheritLabels.secondary)?.name||'none'}` : 'None')}
-    </select>`;
+    </select>`).join('');
 }
 
 // --- Render the full hierarchy tree --------------------------------------
@@ -547,21 +544,18 @@ function renderMarketRows(level, id, sportId, depth){
         </div>
         ${editing ? `
           <select class="select input-sm" style="width:100%" data-key="${preKey}">${providerOptions(pre, true, inheritLabel(inhPre))}</select>
-          <select class="select input-sm" style="width:100%" data-key="${inpKey}">${providerOptions(inp, true, inheritLabel(inhInp))}</select>
-          <div></div>`
+          <select class="select input-sm" style="width:100%" data-key="${inpKey}">${providerOptions(inp, true, inheritLabel(inhInp))}</select>`
         : `
           <div class="tree-cell--prov">${roProvider(pre||inhPre, !!pre)}</div>
-          <div class="tree-cell--prov">${roProvider(inp||inhInp, !!inp)}</div>
-          <div></div>`}
+          <div class="tree-cell--prov">${roProvider(inp||inhInp, !!inp)}</div>`}
         <div class="tree-cell--override">${overrideCell(overridden)}</div>
-        <div class="tree-cell--contains"></div>
         <div class="tree-cell--gth"></div>
         ${actionsCell(editKey, pending, remove)}
       </div>`;
   }).join('');
   const addLine = `
-    <div class="tree-row tree-row--add" style="--depth:${depth};cursor:pointer;display:block;padding:0 var(--sp-3);" onclick="event.stopPropagation();addMarketRow('${level}','${id}','${sportId}')">
-      <div class="tree-row__lead" style="padding-inline-start:calc((${depth} - 1) * var(--tree-indent));">
+    <div class="tree-row tree-row--add" style="--depth:${depth};cursor:pointer;" onclick="event.stopPropagation();addMarketRow('${level}','${id}','${sportId}')">
+      <div class="tree-row__lead">
         ${ic('plus', 16)}
         <span class="tree-add__label">Add market</span>
       </div>
@@ -609,7 +603,7 @@ function actionsCell(editKey, pending, extra=''){
 function renderHierarchyTree(){
   const root = document.getElementById('hierarchy-tree');
   const model = visibleTreeModel();
-  const autoExpand = bcFilterActive() && !bcSuppressAutoExpand;
+  const autoExpand = false;
 
   // Global Default is no longer an editable row (Sport is the top level); the
   // GLOBAL_DEFAULT value stays a silent fallback in the resolver.
@@ -649,14 +643,11 @@ function renderHierarchyTree(){
           </div>
           ${editing ? `
             <select class="select input-sm" style="width:100%" data-key="comp:${comp.id}:prematch">${providerOptions(compPre, true, inheritLabel(parentPre))}</select>
-            <select class="select input-sm" style="width:100%" data-key="comp:${comp.id}:inplay">${providerOptions(compInp, true, inheritLabel(parentInp))}</select>
-            <select class="select input-sm" style="width:100%" data-key="secondary:comp:${comp.id}">${providerOptionsNullable(compSec, `Inherit · ${providerById(parentSec)?.name||'none'}`)}</select>`
+            <select class="select input-sm" style="width:100%" data-key="comp:${comp.id}:inplay">${providerOptions(compInp, true, inheritLabel(parentInp))}</select>`
           : `
             <div class="tree-cell--prov">${roProvider(effPre.value, effPre.source==='own')}</div>
-            <div class="tree-cell--prov">${roProvider(effInp.value, effInp.source==='own')}</div>
-            <div class="tree-cell--prov">${roProvider(compSec||parentSec, !!compSec)}</div>`}
+            <div class="tree-cell--prov">${roProvider(effInp.value, effInp.source==='own')}</div>`}
           <div class="tree-cell--override">${overrideCell(overridden)}</div>
-          <div class="tree-cell--contains">${comp.events} event${comp.events===1?'':'s'}</div>
           <div class="tree-cell--gth">${gth}</div>
           ${actionsCell(editKey, compPending)}
         </div>
@@ -690,14 +681,11 @@ function renderHierarchyTree(){
           </div>
           ${editing ? `
             <select class="select input-sm" style="width:100%" data-key="group:${group.id}:prematch">${providerOptions(grpPre, true, inheritLabel(parentPre))}</select>
-            <select class="select input-sm" style="width:100%" data-key="group:${group.id}:inplay">${providerOptions(grpInp, true, inheritLabel(parentInp))}</select>
-            <select class="select input-sm" style="width:100%" data-key="secondary:group:${group.id}">${providerOptionsNullable(grpSec, `Inherit · ${providerById(parentSec)?.name||'none'}`)}</select>`
+            <select class="select input-sm" style="width:100%" data-key="group:${group.id}:inplay">${providerOptions(grpInp, true, inheritLabel(parentInp))}</select>`
           : `
             <div class="tree-cell--prov">${roProvider(grpPre||parentPre, !!grpPre)}</div>
-            <div class="tree-cell--prov">${roProvider(grpInp||parentInp, !!grpInp)}</div>
-            <div class="tree-cell--prov">${roProvider(grpSec||parentSec, !!grpSec)}</div>`}
+            <div class="tree-cell--prov">${roProvider(grpInp||parentInp, !!grpInp)}</div>`}
           <div class="tree-cell--override">${overrideCell(overridden)}</div>
-          <div class="tree-cell--contains">${comps.length} comp${comps.length===1?'':'s'}</div>
           <div class="tree-cell--gth"></div>
           ${actionsCell(editKey, grpPending, grpEdit)}
         </div>
@@ -728,24 +716,22 @@ function renderHierarchyTree(){
         </div>
         ${sportEditing ? `
           <select class="select input-sm" style="width:100%" data-key="sport:${sport.id}:prematch">${providerOptions(sportPre, true, inheritLabel(globalPre))}</select>
-          <select class="select input-sm" style="width:100%" data-key="sport:${sport.id}:inplay">${providerOptions(sportInp, true, inheritLabel(globalInp))}</select>
-          <select class="select input-sm" style="width:100%" data-key="secondary:sport:${sport.id}">${providerOptionsNullable(sportSec, `Inherit · ${providerById(globalSec)?.name||'none'}`)}</select>`
+          <select class="select input-sm" style="width:100%" data-key="sport:${sport.id}:inplay">${providerOptions(sportInp, true, inheritLabel(globalInp))}</select>`
         : `
           <div class="tree-cell--prov">${roProvider(sportPre||globalPre, !!sportPre)}</div>
-          <div class="tree-cell--prov">${roProvider(sportInp||globalInp, !!sportInp)}</div>
-          <div class="tree-cell--prov">${roProvider(sportSec||globalSec, !!sportSec)}</div>`}
+          <div class="tree-cell--prov">${roProvider(sportInp||globalInp, !!sportInp)}</div>`}
         <div class="tree-cell--override">${overrideCell(sportOverridden)}</div>
-        <div class="tree-cell--contains">${totalComps} comp${totalComps===1?'':'s'}</div>
         <div class="tree-cell--gth"></div>
         ${actionsCell(sportEditKey, sportPending)}
       </div>
       <div class="tree-children ${sportOpen?'open':''}" id="sport-${sport.id}">
         ${groupsHtml}${ungroupedHtml}
         ${renderMarketRows('sport', sport.id, sport.id, 2)}
-        <div class="tree-row tree-row--add" style="--depth:2;cursor:pointer;display:block;padding:0 var(--sp-3);" onclick="createNewGroup('${sport.id}')">
-          <div class="tree-row__lead" style="padding-inline-start:calc(1 * var(--tree-indent));">
-            ${ic('plus', 16)}
-            <span class="tree-add__label">New group</span>
+        <div class="tree-row" style="--depth:2;border-bottom:none;">
+          <div class="tree-row__lead">
+            <button class="btn-add-group" onclick="event.stopPropagation();createNewGroup('${sport.id}')">
+              ${ic('plus', 14)} New group
+            </button>
           </div>
         </div>
       </div>
@@ -807,13 +793,41 @@ function addMarketRow(level, id, sportId){
   openOverlay('overlay-confirm');
 }
 
+let pendingDelete = null;
 function removeMarketRow(level, id, mt){
-  const base = `${level}:${id}:${mt}`;
-  addedMarkets.delete(base);
-  delete MARKET_TYPE_DEFAULTS[base];
-  delete pendingHierarchy[`mt:${base}:prematch`];
-  delete pendingHierarchy[`mt:${base}:inplay`];
+  pendingDelete = { type:'market', level, id, mt, label: mt };
+  showDeleteBar();
+}
+function showDeleteBar(){
+  if (!pendingDelete) return;
+  const bar = document.getElementById('bc-action-bar');
+  bar.dataset.mode = 'delete';
+  bar.querySelector('#bc-pending-count').parentElement.innerHTML = `Delete <strong>${pendingDelete.label}</strong>?`;
+  bar.querySelector('#bc-discard').textContent = 'Cancel';
+  bar.querySelector('#bc-review').textContent = 'Confirm Delete';
+  bar.querySelector('#bc-review').disabled = false;
+  bar.classList.add('open');
+}
+function confirmDelete(){
+  if (!pendingDelete) return;
+  if (pendingDelete.type === 'market'){
+    const base = `${pendingDelete.level}:${pendingDelete.id}:${pendingDelete.mt}`;
+    addedMarkets.delete(base);
+    delete MARKET_TYPE_DEFAULTS[base];
+    delete pendingHierarchy[`mt:${base}:prematch`];
+    delete pendingHierarchy[`mt:${base}:inplay`];
+  }
+  toast('success','Deleted', pendingDelete.label);
+  cancelDelete();
   renderHierarchyTree();
+}
+function cancelDelete(){
+  pendingDelete = null;
+  const bar = document.getElementById('bc-action-bar');
+  delete bar.dataset.mode;
+  bar.querySelector('#bc-discard').textContent = 'Discard';
+  bar.querySelector('#bc-review').textContent = 'Review & Save';
+  updatePendingBar();
 }
 
 function onHierarchyChange(key, value){
@@ -827,6 +841,7 @@ function updatePendingBar(){
   document.getElementById('bc-pending-count').textContent = n;
 }
 document.getElementById('bc-discard').addEventListener('click', ()=>{
+  if (pendingDelete) { cancelDelete(); return; }
   for (const k in pendingHierarchy) delete pendingHierarchy[k];
   editingNodes.clear();
   renderHierarchyTree();
@@ -964,6 +979,7 @@ function commitBlendingChanges(){
 }
 
 document.getElementById('bc-review').addEventListener('click', ()=>{
+  if (pendingDelete) { confirmDelete(); return; }
   const unmapped = blendingUnmappedCheck();
   if (unmapped.length){
     document.getElementById('validation-unmapped-items').innerHTML = unmapped.map(u=>`
@@ -1357,18 +1373,18 @@ function renderCreateForm(){
     <div class="co-form">
       ${CO_SECTION('Target')}
       <div class="field">
+        <label>Sport <span style="color:var(--red-fg);">*</span></label>
+        <select class="select" id="co-sport" onchange="coSportChanged()">
+          <option value="">Select sport…</option>${sportOpts}
+        </select>
+      </div>
+      <div class="field">
         <label>Scope</label>
         <select class="select" id="co-scope" onchange="coScopeChanged()">
           <option value="">Select scope…</option>
           <option value="event" ${scopeVal==='event'?'selected':''}>Event</option>
           <option value="competition" ${scopeVal==='competition'?'selected':''}>Competition</option>
           <option value="market" ${scopeVal==='market'?'selected':''}>Market</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Sport</label>
-        <select class="select" id="co-sport" onchange="coSportChanged()">
-          <option value="">Select sport…</option>${sportOpts}
         </select>
       </div>
       <div class="field" id="co-target-wrap" style="grid-column:1/-1;display:${scopeVal?'':'none'};">
@@ -1558,33 +1574,31 @@ function gaugeSvg(pct, color){
 function renderProviderStatusPanel(){
   const el = document.getElementById('eo-provider-status');
   if (!el) return;
-  el.innerHTML = `<div class="card"><div style="overflow:auto;">
-    <table class="data-table" style="min-width:600px;">
-      <thead><tr><th>Provider</th><th>Status</th><th>Backup</th><th style="width:190px;"></th></tr></thead>
-      <tbody>${PROVIDERS.map(p=>{
-        const h = PROVIDER_HEALTH[p.id];
-        const isSuspended = h.status === 'suspended';
-        const backupProv = h.backup?.provider ? providerById(h.backup.provider) : null;
-        return `<tr>
-          <td>${providerBadge(p.id)}</td>
-          <td>${isSuspended ? '<span class="badge-suspended">Suspended</span>' : healthBadge(h.status)}${h.suspendReason?`<span class="muted" style="font-size:11px;"> · ${h.suspendReason}</span>`:''}</td>
-          <td>${backupProv ? `<span class="badge-backup">${backupProv.name}</span>` : '<span class="muted">—</span>'}</td>
-          <td>
-            ${isSuspended
-              ? `<button class="btn btn-sm btn-primary" onclick="resumeProvider('${p.id}')">Resume</button>`
-              : `<button class="btn btn-sm btn-tertiary" onclick="openSuspendModal('${p.id}')">Suspend</button>`}
-            <button class="btn btn-sm btn-tertiary" onclick="openBackupModal('${p.id}')">Set backup</button>
-          </td>
-        </tr>`;
-      }).join('')}</tbody>
-    </table>
-  </div></div>`;
+  el.innerHTML = `<div style="display:flex;gap:var(--sp-2);flex-wrap:wrap;">
+    ${PROVIDERS.map(p=>{
+      const h = PROVIDER_HEALTH[p.id];
+      const isSuspended = h.status === 'suspended';
+      return `<div class="card" style="padding:var(--sp-3);flex:1;min-width:180px;display:flex;flex-direction:column;gap:var(--sp-2);">
+        <div class="flex-gap-2">${providerBadge(p.id)}${isSuspended ? '<span class="badge-suspended">Suspended</span>' : healthBadge(h.status)}</div>
+        ${isSuspended
+          ? `<button class="btn btn-sm btn-primary" onclick="resumeProvider('${p.id}')" style="width:100%;">Resume</button>`
+          : `<button class="btn btn-sm btn-tertiary" onclick="openSuspendModal('${p.id}')" style="width:100%;">Suspend</button>`}
+      </div>`;
+    }).join('')}
+  </div>`;
 }
 
 function openSuspendModal(providerId){
   const p = providerById(providerId);
   document.getElementById('suspend-subtitle').textContent = p.name;
   document.getElementById('suspend-body').innerHTML = `
+    <div class="field"><label>Backup provider</label>
+      <select class="select" id="suspend-backup-select">
+        <option value="">None</option>
+        ${PROVIDERS.filter(x=>x.id!==providerId).map(x=>`<option value="${x.id}">${x.name}</option>`).join('')}
+      </select>
+      <div class="hint">Traffic will route to this provider while ${p.name} is suspended.</div>
+    </div>
     <div class="field"><label>Reason</label>
       <select class="select" id="suspend-reason">
         <option value="Outage">Outage</option>
@@ -1593,12 +1607,13 @@ function openSuspendModal(providerId){
         <option value="Other">Other</option>
       </select>
     </div>
-    <div class="field"><label>Note (optional)</label><input class="input" id="suspend-note" placeholder="Additional details…"></div>
     <div class="alert alert-warning">${ICONS.alert()}<div>Suspending this provider will affect all events currently using it.</div></div>`;
   document.getElementById('suspend-confirm').onclick = ()=>{
     const reason = document.getElementById('suspend-reason').value || 'Manual suspension';
+    const backupId = document.getElementById('suspend-backup-select').value;
     PROVIDER_HEALTH[providerId].status = 'suspended';
     PROVIDER_HEALTH[providerId].suspendReason = reason;
+    if (backupId) PROVIDER_HEALTH[providerId].backup = { provider: backupId, autoResume: true };
     logAudit('Level 2 — Event Overrides','Provider suspended',`${p.name}: ${reason}`);
     closeOverlay('overlay-suspend');
     renderProviderStatusPanel();
@@ -1888,7 +1903,7 @@ function renderSuggestedTab(){
       </div>
       <div class="suggestion-card__arrow">${ICONS.arrowRight()}</div>
       <div class="suggestion-card__gth">
-        <div class="suggestion-card__label">AI SUGGESTION</div>
+        <div class="suggestion-card__label">SUGGESTED MATCH</div>
         <div class="suggestion-card__path">${[r.gthSport, r.gthCompetition, r.gthMarketType].filter(Boolean).join(' → ')}</div>
         <div class="flex-gap-2" style="margin-top:6px;">
           <div class="confidence-bar" style="width:70px;"><div class="confidence-bar__fill" style="width:${r.confidence}%;background:${r.confidence>=85?'var(--green-solid)':'var(--yellow-solid)'};"></div></div>
@@ -1937,10 +1952,25 @@ function renderUnmappedMtTab(){
       ${r.status==='unmapped' ? `<button class="btn btn-sm btn-tertiary" onclick="openReject('${r.id}')">Reject</button>` : ''}
     </div>`);
 }
+function renderCoverageGapsTab(){
+  const tbody = document.getElementById('gaps-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = COVERAGE_GAPS.map(g=>`<tr>
+    <td><strong>${g.sport}</strong></td>
+    <td>${g.competition}</td>
+    <td>${g.issue}</td>
+    <td>${g.currentProvider||'—'}</td>
+    <td>${g.suggestedAction||'—'}</td>
+    <td><span class="badge ${g.severity==='error'?'badge-red':'badge-yellow'}">${g.severity==='error'?'Critical':'Review'}</span></td>
+  </tr>`).join('') || `<tr><td colspan="6"><div class="empty-state">No coverage gaps detected.</div></td></tr>`;
+}
 function refreshMappingCounts(){
+  const gapsCount = COVERAGE_GAPS.length;
+  const gapsBadge = document.getElementById('gaps-tab-badge');
+  if (gapsBadge){ gapsBadge.textContent = gapsCount; gapsBadge.style.display = gapsCount===0?'none':''; }
   const suggestedCount = GTH_MAPPINGS.filter(m=>m.status==='suggested').length;
   const unmappedTabCount = GTH_MAPPINGS.filter(m=>m.status==='unmapped'||m.status==='rejected').length;
-  const needsAttention = GTH_MAPPINGS.filter(m=>m.status==='suggested'||m.status==='unmapped').length;
+  const needsAttention = GTH_MAPPINGS.filter(m=>m.status==='suggested'||m.status==='unmapped').length + gapsCount;
   const unmappedEl = document.getElementById('unmapped-count');
   if (unmappedEl) unmappedEl.textContent = needsAttention;
   const navBadge = document.getElementById('mapping-nav-badge');
@@ -1957,7 +1987,7 @@ function refreshMappingCounts(){
   if (notif){ const bc = notif.querySelector('.badge-count'); if(bc) bc.style.display = needsAttention===0 ? 'none' : 'flex'; }
 }
 function refreshAllMappingTabs(){
-  renderSuggestedTab(); renderActiveCompTab(); renderActiveMtTab(); renderUnmappedCompTab(); renderUnmappedMtTab();
+  renderSuggestedTab(); renderActiveCompTab(); renderActiveMtTab(); renderUnmappedCompTab(); renderUnmappedMtTab(); renderCoverageGapsTab();
   refreshMappingCounts();
 }
 
@@ -1982,13 +2012,7 @@ document.getElementById('unmapped-export').addEventListener('click', ()=>{
   const rows = GTH_MAPPINGS.filter(m=>(m.status==='unmapped'||m.status==='rejected') && m.level===lvl).map(mappingDisplayRow);
   exportMappingCSV(rows, lvl==='competition' ? 'unmapped_competitions.csv' : 'unmapped_market_types.csv');
 });
-// Suggestions panel filters (provider + free text)
-(function(){
-  const prov = document.getElementById('sugg-provider');
-  PROVIDERS.forEach(p=> prov.innerHTML += `<option value="${p.id}">${p.name}</option>`);
-  prov.addEventListener('change', function(){ getTableState('suggested').provider = this.value; renderSuggestedTab(); });
-  document.getElementById('sugg-search').addEventListener('input', function(){ getTableState('suggested').text = this.value; renderSuggestedTab(); });
-})();
+// Suggestions panel — filters removed (3a)
 
 function acceptSuggestion(id){
   const rec = GTH_MAPPINGS.find(m=>m.id===id); if(!rec) return;

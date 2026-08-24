@@ -491,7 +491,7 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
 /* Blending tree — 8-column CSS grid, sticky header, depth-indented rows */
 #view-blending-config.active{display:flex;flex-direction:column;height:100%;overflow:hidden;}
 .tree{flex:1;min-height:0;display:flex;flex-direction:column;
-  --tree-cols:minmax(200px,1fr) 128px 128px 128px 96px 80px 32px 96px;
+  --tree-cols:minmax(200px,1fr) 128px 128px 96px 32px 96px;
   --tree-indent:18px;font-size:var(--fs-xs);}
 .tree-scroll{flex:1;min-height:0;overflow:auto;}
 .tree-inner{min-width:940px;}
@@ -513,9 +513,7 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
   font-weight:var(--fw-bold);color:var(--fg-muted);z-index:1;
   min-height:36px;}
 @media(max-width:1200px){
-  .tree{--tree-cols:minmax(170px,1fr) 120px 120px 120px 90px 32px 88px;}
-  .tree-cell--contains{display:none;}
-  .tree-head [role="columnheader"]:nth-child(6){display:none;}
+  .tree{--tree-cols:minmax(170px,1fr) 120px 120px 90px 32px 88px;}
 }
 /* Read-only provider cells + the Config (Default/Override) column */
 .tree-cell--prov{min-width:0;overflow:hidden;}
@@ -541,10 +539,17 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
 .tree-row--add .tree-row__lead{
   border:2px dashed var(--blue-muted);border-radius:var(--radii-md);
   padding:var(--sp-1_5) var(--sp-3);margin:var(--sp-1) 0;
-  justify-content:center;grid-column:1/-1;
+  justify-content:center;
 }
 .tree-row--add:hover .tree-row__lead{border-color:var(--blue-solid);background:var(--blue-subtle);}
 .tree-add__label{font-size:var(--fs-xs);font-weight:var(--fw-semibold);color:var(--blue-fg);}
+.btn-add-group{
+  display:inline-flex;align-items:center;gap:var(--sp-1);
+  font-size:11px;font-weight:var(--fw-semibold);color:var(--blue-fg);
+  background:var(--bg-panel);border:1px solid var(--blue-muted);border-radius:var(--radii-md);
+  padding:var(--sp-1) var(--sp-3);cursor:pointer;height:24px;
+}
+.btn-add-group:hover{background:var(--blue-subtle);border-color:var(--blue-solid);}
 
 /* Rich hover tooltip for "not mapped to GTH" warnings, with a fix-it link */
 .map-warning{position:relative;display:inline-flex;align-items:center;cursor:help;flex:none;}
@@ -625,7 +630,6 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
 .tree-row.open .chev{transform:rotate(90deg);}
 .tree-row .name{font-weight:var(--fw-medium);color:var(--fg-title);}
 .tree-cell--source{color:var(--fg-muted);}
-.tree-cell--contains{color:var(--fg-muted);}
 .tree-cell--gth{display:flex;align-items:center;justify-content:center;}
 .tree-cell--state{text-align:right;}
 .tree-children{display:none;}

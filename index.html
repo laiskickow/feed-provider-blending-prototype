@@ -6,7 +6,7 @@
 <title>Feed Provider Blending &amp; Integration Platform</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Murecho:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=21">
+<link rel="stylesheet" href="styles.css?v=23">
 </head>
 <body>
 <!-- ============ SVG SPRITE — Lucide icons, Ivory stroke scale ============ -->
@@ -108,7 +108,7 @@
       <div class="view-header">
         <div>
           <h1>Blending Configuration</h1>
-          <p>Provider cascade: Sport → Group → Competition. Each level sets Primary (Pre-Match + In-Play) and Secondary, and can add per-market overrides. Most specific wins; unconfigured levels inherit upward.</p>
+          <p>Provider cascade: Sport → Group → Competition. Each level sets a Primary provider for Pre-Match and In-Play, and can add per-market overrides. Most specific wins; unconfigured levels inherit upward.</p>
         </div>
       </div>
 
@@ -147,9 +147,7 @@
               <div role="columnheader">Hierarchy</div>
               <div role="columnheader">Pre-Match</div>
               <div role="columnheader">In-Play</div>
-              <div role="columnheader">Secondary</div>
               <div role="columnheader">Config</div>
-              <div class="tree-cell--contains" role="columnheader">Contains</div>
               <div class="tree-cell--gth" role="columnheader">GTH</div>
               <div class="tree-cell--actions" role="columnheader">Actions</div>
             </div>
@@ -176,12 +174,7 @@
           <h1>Overrides</h1>
           <p>Temporary provider overrides for edge cases. These take priority over Blending defaults until removed.</p>
         </div>
-        <div class="view-header__actions">
-          <button class="btn btn-primary" id="eo-create-btn">
-            <svg class="ic ic-16" aria-hidden="true"><use href="#ic-plus"/></svg>
-            Create Override
-          </button>
-        </div>
+        <div class="view-header__actions"></div>
       </div>
 
       <!-- Provider status — suspend a feed or set a fallback (moved from Monitoring) -->
@@ -203,6 +196,12 @@
         <select class="select input-sm" id="eo-filter-sport" style="width:160px;">
           <option value="">All sports</option>
         </select>
+        <div class="toolbar__actions">
+          <button class="btn btn-primary" id="eo-create-btn">
+            <svg class="ic ic-16" aria-hidden="true"><use href="#ic-plus"/></svg>
+            Create Override
+          </button>
+        </div>
       </div>
 
       <!-- Override cards list -->
@@ -290,7 +289,7 @@
       <div class="view-header">
         <div>
           <h1>Provider Mappings</h1>
-          <p>Map external provider hierarchies to internal GTH. Unmapped items cannot be used as a default or in blending.</p>
+          <p>Map external provider hierarchies to internal GTH. Unmapped items cannot be used as a default or in blending. Coverage gaps are flagged under the Gaps tab and in notifications.</p>
         </div>
       </div>
 
@@ -298,12 +297,7 @@
       <div class="suggestions-panel" id="mappings-suggestions">
         <div class="suggestions-panel__head">
           <div class="flex-gap-2">
-            <span class="badge badge-blue">AI</span>
             <strong id="suggestions-title">Suggestions to review</strong>
-          </div>
-          <div class="flex-gap-2">
-            <select class="select input-sm" id="sugg-provider" style="width:150px;"><option value="">All providers</option></select>
-            <input class="input input-sm" id="sugg-search" placeholder="Filter suggestions…" style="width:220px;">
           </div>
         </div>
         <div id="suggested-cards"></div>
@@ -311,6 +305,7 @@
 
       <div class="tabs">
         <div class="tab active" data-tab="active">Active Mappings</div>
+        <div class="tab" data-tab="gaps">Coverage Gaps <span class="nav-item__badge" style="margin-left:6px;" id="gaps-tab-badge">0</span></div>
         <div class="tab" data-tab="unmapped">Unmapped <span class="nav-item__badge" style="margin-left:6px;" id="unmapped-tab-badge">2</span></div>
       </div>
 
@@ -331,6 +326,16 @@
         </div>
         <div class="card" style="overflow:auto;display:none;" id="active-mt-wrap">
           <table class="data-table" id="table-active-markettypes"><thead></thead><tbody></tbody></table>
+        </div>
+      </div>
+
+      <!-- COVERAGE GAPS -->
+      <div class="tab-panel" id="tab-gaps">
+        <div class="card" style="overflow:auto;">
+          <table class="data-table" id="table-coverage-gaps">
+            <thead><tr><th>Sport</th><th>Competition</th><th>Issue</th><th>Current Provider</th><th>Suggested Action</th><th>Severity</th></tr></thead>
+            <tbody id="gaps-tbody"></tbody>
+          </table>
         </div>
       </div>
 
@@ -667,8 +672,8 @@
   <div class="ai-messages" id="docs-body" style="display:block;"></div>
 </div>
 
-<script src="data.js?v=21"></script>
-<script src="docs.js?v=21"></script>
-<script src="app.js?v=21"></script>
+<script src="data.js?v=23"></script>
+<script src="docs.js?v=23"></script>
+<script src="app.js?v=23"></script>
 </body>
 </html>

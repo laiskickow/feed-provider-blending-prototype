@@ -197,8 +197,56 @@ let EVENT_OVERRIDES = [
     createdAt:'2026-08-07T15:00:00Z', createdBy:'m.tato',
     note:'BetGenious has better in-play odds for Match Winner across basketball'
   },
+  {
+    id:'ov-5', scope:'competition', eventId:null,
+    sportId:'cricket', competitionId:'cr-bbl', marketType:null,
+    matchType:'prematch', provider:'betgenious',
+    expiresAt:'2026-08-20T00:00:00Z',
+    createdAt:'2026-08-06T10:00:00Z', createdBy:'j.alvarez',
+    note:'BetRadar latency issues for Big Bash'
+  },
+  {
+    id:'ov-6', scope:'event', eventId:'EVT-40030',
+    sportId:'f1', competitionId:'f1-f2', marketType:null,
+    matchType:'inplay', provider:'inspired',
+    expiresAt:null,
+    createdAt:'2026-08-10T14:30:00Z', createdBy:'k.nguyen',
+    note:'Highlight feed down for F2 qualifying'
+  },
+  {
+    id:'ov-7', scope:'market', eventId:null,
+    sportId:'soccer', competitionId:'sv-euro', marketType:'Both Teams to Score',
+    matchType:'prematch', provider:'betradar',
+    expiresAt:null,
+    createdAt:'2026-08-09T08:15:00Z', createdBy:'m.tato',
+    note:'Inspired BTTS data delayed for Virtual Euro Cup'
+  },
+  {
+    id:'ov-8', scope:'competition', eventId:null,
+    sportId:'ebasketball', competitionId:'eba-battle', marketType:null,
+    matchType:'inplay', provider:'inspired',
+    expiresAt:'2026-08-25T00:00:00Z',
+    createdAt:'2026-08-11T12:45:00Z', createdBy:'j.alvarez',
+    note:'Highlight outage — Inspired serving eBasketball Battle'
+  },
+  {
+    id:'ov-9', scope:'market', eventId:null,
+    sportId:'f1', competitionId:null, marketType:'Podium Finish',
+    matchType:'prematch', provider:'betradar',
+    expiresAt:null,
+    createdAt:'2026-08-05T16:00:00Z', createdBy:'k.nguyen',
+    note:'Highlight Podium Finish odds unreliable across F1'
+  },
+  {
+    id:'ov-10', scope:'event', eventId:'EVT-20110',
+    sportId:'basketball', competitionId:'eb-euroleague', marketType:null,
+    matchType:'prematch', provider:'betradar',
+    expiresAt:'2026-08-19T00:00:00Z',
+    createdAt:'2026-08-10T20:00:00Z', createdBy:'m.tato',
+    note:'BetGenious prematch data missing for this fixture'
+  },
 ];
-let nextOvId = 5;
+let nextOvId = 11;
 function genOverrideId(){ return `ov-${nextOvId++}`; }
 
 // ---- Provider health / outages (Level 3) --------------------------------
@@ -238,8 +286,12 @@ const COVERAGE = [
   { provider:'highlight', pct:52, servedEvents:11, assignedEvents:21 },
 ];
 const COVERAGE_GAPS = [
-  { sport:'Cricket', competition:'Caribbean Premier League', issue:'2 events with no provider offering in-play pricing', severity:'warning' },
-  { sport:'eBasketball', competition:'eBasketball Battle', issue:'1 market group (Player Props) uncovered by any mapped provider', severity:'error' },
+  { sport:'Cricket', competition:'Caribbean Premier League', issue:'2 events with no provider offering in-play pricing', severity:'warning', currentProvider:'BetGenious', suggestedAction:'Map BetRadar as secondary for in-play' },
+  { sport:'eBasketball', competition:'eBasketball Battle', issue:'1 market group (Player Props) uncovered by any mapped provider', severity:'error', currentProvider:'Highlight', suggestedAction:'Add Inspired market type mapping' },
+  { sport:'Soccer Virtuals', competition:'Virtual World Series', issue:'Correct Score market missing from all providers', severity:'warning', currentProvider:'Inspired', suggestedAction:'Review market type mappings for Inspired' },
+  { sport:'F1', competition:'Formula 2', issue:'Pre-match feed gap — no provider active after Highlight outage', severity:'error', currentProvider:'Highlight', suggestedAction:'Set BetRadar as fallback provider' },
+  { sport:'European Basketball', competition:'LNB Pro A', issue:'3 events with stale odds (>30 min delay)', severity:'warning', currentProvider:'BetGenious', suggestedAction:'Investigate BetGenious latency or switch to BetRadar' },
+  { sport:'Cricket', competition:'Big Bash League', issue:'Total Runs Over/Under not offered by current provider', severity:'warning', currentProvider:'BetRadar', suggestedAction:'Map BetGenious market type for this competition' },
 ];
 
 // ---- Canonical GTH market types, per sport --------------------------------
