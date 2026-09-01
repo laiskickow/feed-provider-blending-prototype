@@ -751,7 +751,7 @@ function renderHierarchyTree(){
 
 // Add-market icon (in the Actions column of Sport / Group / Competition nodes).
 function addMarketBtn(level, id, sportId){
-  return `<button class="icon-btn" onclick="event.stopPropagation();openAddMarketDrawer('${level}','${id}','${sportId}')" title="Add market override">${ic('plus',14)}</button>`;
+  return `<button class="icon-btn" onclick="event.stopPropagation();openAddMarketDrawer('${level}','${id}','${sportId}')" title="Add override">${ic('plus',14)}</button>`;
 }
 
 // Add-market drawer — multi-select markets for this layer + set Pre-Match / In-Play providers.
@@ -798,8 +798,8 @@ function confirmAddMarket(){
   closeDrawer('drawer-add-market');
   renderHierarchyTree();
   const nm = addMarketNodeName(level, id) || id;
-  logAudit('Level 1 — Blending Config','Markets added',`${checked.length} market(s) at ${nm}`);
-  toast('success','Markets added',`${checked.length} market${checked.length!==1?'s':''} at ${nm}`);
+  logAudit('Level 1 — Blending Config','Overrides added',`${checked.length} override(s) at ${nm}`);
+  toast('success','Overrides added',`${checked.length} override${checked.length!==1?'s':''} at ${nm}`);
 }
 
 // Add-market picker — pick one or more market types to override at a node
@@ -1372,8 +1372,9 @@ function editOverride(id){
   coEditingId = id;
   const target = ov.scope==='event' ? ov.eventId : ov.competitionId;
   coDraft = {
-    scope: ov.scope, sportId: ov.sportId,
-    targets: target ? [target] : [],
+    sportId: ov.sportId,
+    competitions: (ov.scope==='competition' || (ov.scope==='market' && ov.competitionId)) ? [ov.competitionId] : [],
+    events: ov.scope==='event' ? [ov.eventId] : [],
     marketTypes: ov.marketType ? [ov.marketType] : [],
     prematchProvider: ov.matchType==='prematch'?ov.provider:null,
     inplayProvider: ov.matchType==='inplay'?ov.provider:null,
@@ -1386,8 +1387,7 @@ function editOverride(id){
 /* ---- Create Override modal — sectioned form with chip multi-selects ---- */
 let coDraft = {};
 let coEditingId = null;
-let coTargetCtl = null;   // events (scope=event) or competitions (comp/market)
-let coMarketCtl = null;   // market types (scope=market)
+let coCompCtl = null, coEventCtl = null, coMarketCtl = null;
 let nextBatch = 1;
 function genBatchId(){ return `b-${nextBatch++}`; }
 
@@ -1405,7 +1405,6 @@ function renderCreateForm(){
   document.getElementById('co-title').textContent = isEdit ? 'Edit Override' : 'Create Override';
   document.getElementById('co-subtitle').textContent = 'Override which provider serves an event, competition or market — takes priority over Blending until removed.';
 
-  const scopeVal = coDraft.scope || '';
   const sportOpts = SPORTS.map(s=>`<option value="${s.id}" ${coDraft.sportId===s.id?'selected':''}>${s.name}</option>`).join('');
   const provOpts = PROVIDERS.map(p=>`<option value="${p.id}" ${coDraft.prematchProvider===p.id?'selected':''}>${p.name}</option>`).join('');
   const provOptsInplay = PROVIDERS.map(p=>`<option value="${p.id}" ${coDraft.inplayProvider===p.id?'selected':''}>${p.name}</option>`).join('');
@@ -1419,22 +1418,20 @@ function renderCreateForm(){
           <option value="">Select sport…</option>${sportOpts}
         </select>
       </div>
-      <div class="field">
-        <label>Scope</label>
-        <select class="select" id="co-scope" onchange="coScopeChanged()">
-          <option value="">Select scope…</option>
-          <option value="event" ${scopeVal==='event'?'selected':''}>Event</option>
-          <option value="competition" ${scopeVal==='competition'?'selected':''}>Competition</option>
-          <option value="market" ${scopeVal==='market'?'selected':''}>Market</option>
-        </select>
-      </div>
-      <div class="field" id="co-target-wrap" style="grid-column:1/-1;display:${scopeVal?'':'none'};">
-        <label id="co-target-label">Target</label>
-        <div id="co-target-mount"></div>
-      </div>
-      <div class="field" id="co-market-wrap" style="grid-column:1/-1;display:${scopeVal==='market'?'':'none'};">
-        <label>Market types</label>
-        <div id="co-market-mount"></div>
+      <div id="co-targets-wrap" style="grid-column:1/-1;display:${coDraft.sportId?'':'none'};">
+        <div class="field" style="margin-bottom:var(--sp-3);">
+          <label>Competitions</label>
+          <div id="co-comp-mount"></div>
+          <div class="hint">Leave blank to apply a market override to the whole sport.</div>
+        </div>
+        <div class="field" style="margin-bottom:var(--sp-3);">
+          <label>Events</label>
+          <div id="co-event-mount"></div>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label>Market types</label>
+          <div id="co-market-mount"></div>
+        </div>
       </div>
 
       ${CO_SECTION('Providers')}
@@ -1472,32 +1469,20 @@ function renderCreateForm(){
 // Build the target (events/competitions) and market-type chip controls for the
 // current scope + sport, preserving any draft selection (edit mode).
 function coRebuildTargets(){
-  const scope = document.getElementById('co-scope').value;
   const sportId = document.getElementById('co-sport').value;
-  document.getElementById('co-target-wrap').style.display = scope ? '' : 'none';
-  document.getElementById('co-market-wrap').style.display = scope==='market' ? '' : 'none';
-
-  const targetMount = document.getElementById('co-target-mount');
-  targetMount.innerHTML = ''; coTargetCtl = null;
-  if (scope==='event'){
-    document.getElementById('co-target-label').textContent = 'Events';
-    const evts = sportId ? EVENTS.filter(e=>e.sport===sportId) : EVENTS;
-    coTargetCtl = createMultiSelect(targetMount, { options:evts.map(e=>({value:e.id,label:`${e.name} · ${e.id}`})), selected:coDraft.targets||[], placeholder:'Select events…' });
-  } else if (scope==='competition' || scope==='market'){
-    document.getElementById('co-target-label').textContent = 'Competitions';
-    const comps = sportId ? (SPORTS.find(s=>s.id===sportId)?.competitions||[]) : SPORTS.flatMap(s=>s.competitions);
-    coTargetCtl = createMultiSelect(targetMount, { options:comps.map(c=>({value:c.id,label:c.name})), selected:coDraft.targets||[], placeholder: scope==='market'?'Select competitions… (blank = whole sport)':'Select competitions…' });
-  }
-
-  if (scope==='market'){
-    const mkMount = document.getElementById('co-market-mount');
-    mkMount.innerHTML = '';
-    const types = SPORT_MARKET_TYPES[sportId] || [];
-    coMarketCtl = createMultiSelect(mkMount, { options:types.map(t=>({value:t,label:t})), selected:coDraft.marketTypes||[], placeholder:'Select market types…' });
-  } else coMarketCtl = null;
+  document.getElementById('co-targets-wrap').style.display = sportId ? '' : 'none';
+  if (!sportId){ coCompCtl = coEventCtl = coMarketCtl = null; return; }
+  const comps = SPORTS.find(s=>s.id===sportId)?.competitions || [];
+  const evts = EVENTS.filter(e=>e.sport===sportId);
+  const types = SPORT_MARKET_TYPES[sportId] || [];
+  const cm = document.getElementById('co-comp-mount'); cm.innerHTML = '';
+  coCompCtl = createMultiSelect(cm, { options:comps.map(c=>({value:c.id,label:c.name})), selected:coDraft.competitions||[], placeholder:'Select competitions…' });
+  const em = document.getElementById('co-event-mount'); em.innerHTML = '';
+  coEventCtl = createMultiSelect(em, { options:evts.map(e=>({value:e.id,label:`${e.name} · ${e.id}`})), selected:coDraft.events||[], placeholder:'Select events…' });
+  const mm = document.getElementById('co-market-mount'); mm.innerHTML = '';
+  coMarketCtl = createMultiSelect(mm, { options:types.map(t=>({value:t,label:t})), selected:coDraft.marketTypes||[], placeholder:'Select market types…' });
 }
 
-function coScopeChanged(){ coRebuildTargets(); }
 function coSportChanged(){ coRebuildTargets(); }
 
 function toLocalInput(d){
@@ -1506,8 +1491,6 @@ function toLocalInput(d){
 }
 
 function validateAndSaveOverride(){
-  const scope = document.getElementById('co-scope')?.value;
-  if (!scope){ toast('warning','Missing field','Select a scope.'); return; }
   const sportId = document.getElementById('co-sport')?.value;
   if (!sportId){ toast('warning','Missing field','Select a sport.'); return; }
   const prematchProv = document.getElementById('co-provider-pre')?.value || null;
@@ -1516,7 +1499,16 @@ function validateAndSaveOverride(){
   const note = document.getElementById('co-note')?.value || '';
   const expiresEl = document.getElementById('co-expires');
   const expiresAt = expiresEl?.value ? new Date(expiresEl.value).toISOString() : null;
-  const targets = coTargetCtl ? coTargetCtl.getSelected() : [];
+  const comps = coCompCtl ? coCompCtl.getSelected() : [];
+  const events = coEventCtl ? coEventCtl.getSelected() : [];
+  const marketTypes = coMarketCtl ? coMarketCtl.getSelected() : [];
+
+  // Scope is inferred from what's selected: market types > events > competitions
+  let scope;
+  if (marketTypes.length) scope = 'market';
+  else if (events.length) scope = 'event';
+  else if (comps.length) scope = 'competition';
+  else { toast('warning','Missing field','Select a competition, event, or market type.'); return; }
 
   const overrides = [];
   const pushPhases = (base)=>{
@@ -1525,19 +1517,15 @@ function validateAndSaveOverride(){
   };
 
   if (scope === 'event'){
-    if (!targets.length){ toast('warning','Missing field','Select at least one event.'); return; }
-    targets.forEach(evtId=>{
+    events.forEach(evtId=>{
       const evt = EVENTS.find(e=>e.id===evtId);
       pushPhases({ scope:'event', eventId:evtId, sportId:evt.sport, competitionId:evt.competition, marketType:null });
     });
   } else if (scope === 'competition'){
-    if (!targets.length){ toast('warning','Missing field','Select at least one competition.'); return; }
-    targets.forEach(compId=> pushPhases({ scope:'competition', eventId:null, sportId, competitionId:compId, marketType:null }));
+    comps.forEach(compId=> pushPhases({ scope:'competition', eventId:null, sportId, competitionId:compId, marketType:null }));
   } else {
-    const marketTypes = coMarketCtl ? coMarketCtl.getSelected() : [];
-    if (!marketTypes.length){ toast('warning','Missing field','Select at least one market type.'); return; }
-    const comps = targets.length ? targets : [null]; // blank = whole sport
-    comps.forEach(compId=> marketTypes.forEach(mt=> pushPhases({ scope:'market', eventId:null, sportId, competitionId:compId, marketType:mt })));
+    const scopeComps = comps.length ? comps : [null]; // blank = whole sport
+    scopeComps.forEach(compId=> marketTypes.forEach(mt=> pushPhases({ scope:'market', eventId:null, sportId, competitionId:compId, marketType:mt })));
   }
 
   if (coEditingId){
@@ -1833,8 +1821,7 @@ function gapWarningRows(tableId, colspan){
   let gaps = [];
   if (tableId==='table-active-competitions') gaps = COVERAGE_GAPS.filter(g=>!/market group/i.test(g.issue));
   else if (tableId==='table-active-markettypes') gaps = COVERAGE_GAPS.filter(g=>/market group/i.test(g.issue));
-  else if (tableId==='table-mappings') gaps = COVERAGE_GAPS;
-  else return '';
+  else return '';  // merged Mappings table shows no gap rows — gaps live only in the Coverage Gaps tab
   return gaps.map(g=>`<tr class="${g.severity==='error'?'row-error':'row-override'}">
     <td colspan="${colspan}">
       <div class="flex-gap-2" style="align-items:center;">

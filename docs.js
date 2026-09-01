@@ -1,102 +1,92 @@
 /* ============================================================
    DOCUMENTATION PANEL CONTENT
    Shown in-page (no navigation) via the header "Documentation" button.
-   Mirrors the PRD section-by-section, plus what this prototype adds
-   beyond it. Update DOC_SECTIONS whenever requirements/features change —
-   this is the single source of truth the panel renders from.
+   Single source of truth the panel renders from — update DOC_SECTIONS
+   whenever features change.
    ============================================================ */
 
-const DOC_LAST_UPDATED = '11 Aug 2026';
+const DOC_LAST_UPDATED = '1 Sep 2026';
 
 const DOC_SECTIONS = [
   {
     title: 'What this is',
     body: [
-      'A mocked, click-through UI for the Feed Provider Blending & Integration Platform PRD — used to validate structure and logic with users before any backend is built.',
+      'A mocked, click-through UI for the Fit Provider Platform — one place to manage provider mappings, blending configuration and temporary overrides, replacing the separate BMT tool. Used to validate structure and logic with users before any backend is built.',
       'All data on screen is fabricated. Nothing here is connected to a real feed provider, GTH, or bet stream.',
-      'Built to the Ivory Design System (Flutter GST) — dense, trader-oriented, speed over whitespace.',
+      'Built to the Ivory Design System (Flutter GST) — dense, trader-oriented, speed over whitespace; light + dark.',
     ]
   },
   {
-    title: 'Level 1 — Default Provider Configuration',
-    screen: 'Blending Configuration',
+    title: 'Blending Configuration',
+    screen: 'Blending',
     body: [
-      'Configure a default provider at Sport → Competition → Pre-Match/In-Play. The lowest configured level wins; unconfigured levels inherit upward.',
-      'New events under a configured node auto-assign to that provider (simulated).',
-      'Blocking validation: saving is refused if the chosen provider isn’t fully GTH-mapped for that node, with a direct link into Provider Mappings to resolve it.',
+      'Provider cascade: <b>Global → Sport → Group → Competition</b>, with per-market overrides at the most granular level. The most specific level that has a value set wins; unconfigured levels inherit upward (shown as “↑ provider”).',
+      'Every level sets a <b>Primary</b> provider independently for <b>Pre-Match</b> and <b>In-Play</b> (a Secondary provider gap-fills markets the Primary doesn’t cover).',
+      'Group / tier templates (per sport) cascade defaults across many competitions; a competition can still override its group. Create/edit groups from the “New group” CTA (top of each sport) and the group side-drawer.',
+      'Rows are read-only by default; the edit (pencil) action in the Actions column reveals the provider selects for that node. The Config column shows whether each value is a Default or an Override.',
+      '“Add override”: an action-column icon on any Sport/Group/Competition opens a side drawer to multi-select market types for that layer and set their Pre-Match / In-Play providers in one go.',
+      'Changes are staged and applied via the Review & Save bar. Saving is gated on GTH mapping — an unmapped provider is flagged with a link into Provider Mappings.',
     ]
   },
   {
-    title: 'Level 2 — Per-Event Provider Overrides',
-    screen: 'Event Overrides',
+    title: 'Overrides',
+    screen: 'Overrides',
     body: [
-      'Search/filter Pre-Match and In-Play events by sport, competition, status, time range and override state.',
-      'Override Pre-Match and In-Play independently per event; overrides persist across status transitions until cleared.',
-      'A provider not mapped to a competition can still be applied as an override, but is flagged as a conflict rather than blocked outright — a deliberate difference from Level 1’s hard block, since overrides are a fast, per-event escape hatch.',
-    ]
-  },
-  {
-    title: 'Level 3 — Automated Actions (read-only)',
-    screen: 'Automated Actions',
-    body: [
-      'System-driven behaviour, not user-configurable here: outage fallback, gap coverage, and dynamic pricing blending.',
-      'Automation Log: a searchable/filterable history of every automated action taken, per event/competition (outage triggered, fallback activated, recovered, gap coverage added).',
-      'Provider Health: live status (Operational/Degraded/Down) and 30-day uptime per provider.',
-      'Coverage Dashboard: % of assigned content actually being served per provider, plus known coverage gaps.',
+      'Temporary provider overrides for edge cases; they take priority over Blending defaults until removed or expired.',
+      'Provider status: a compact switch per provider for quick suspend / resume (with live health badges — Operational / Degraded / Down).',
+      'Create Override: choose a Sport, then all target options appear at once — pick any Competitions, Events, and/or Market types, set Pre-Match / In-Play providers, an optional expiry and a note. Scope is inferred from what you select (market types → market, else events → event, else competitions → competition). No separate scope step.',
+      'Overrides list supports search + filters, edit and remove, and shows scope, phase, provider, expiry and who created it.',
     ]
   },
   {
     title: 'Provider Mappings (GTH)',
-    screen: 'Provider Mappings',
+    screen: 'Mappings',
     body: [
-      'Maps each provider’s own hierarchy (sport/competition/market type) to the internal GTH hierarchy. A provider item cannot be used as a default or in blending until mapped.',
-      '<b>Market Type ≠ Match Type.</b> Match Type (Pre-Match/In-Play) is the Level 1 timing dimension. Market Type is the actual bet type — e.g. "Match Odds", "Total Goals Over/Under" for Soccer, or "Race Winner", "Fastest Lap" for F1 — and is sport-specific (5 examples per sport in this mock). A provider\'s own name for a bet type is mapped once per sport to GTH\'s canonical name, independently of any competition.',
-      '"Suggested Maps" — items never mapped, each with an AI-suggested GTH match (competitions and market types together). Accept, change (manual search), or reject with a reason.',
-      '"Active Mappings" — confirmed mappings, split into Competitions and Market Types sub-tabs; editable, with history and delete.',
-      '"Unmapped" — everything still needing a decision with no usable suggestion, plus previously-rejected items (both can be manually mapped from here).',
-      'All mapping tables use structured, sortable, filterable, exportable columns (Provider / Provider Sport / Provider Competition[/ Market Type] / GTH Sport / GTH Competition[/ Market Type]) rather than a single concatenated path string.',
+      'Maps each provider’s own hierarchy (sport / competition / market type) to the internal GTH hierarchy. An item cannot be used as a default or in blending until mapped.',
+      'Suggestions panel (top): items with an AI-suggested GTH match — Accept, Change (manual search), or Reject with a reason.',
+      'One merged <b>Mappings</b> table: a button group filters <b>All</b> vs <b>Unmapped</b>; Competition vs Market Type is the filterable <b>Type</b> column. Structured, sortable, filterable, exportable feed→GTH columns with an Active / Unmapped / Rejected status.',
+      '<b>Coverage Gaps</b> is its own tab — the full, dated list of gaps (missing in-play pricing, uncovered market groups, stale odds, etc.), also surfaced in the header bell count.',
+      '<b>Market Type ≠ Match Type.</b> Match Type (Pre-Match / In-Play) is the timing dimension in Blending. Market Type is the bet type — e.g. “Match Odds”, “Race Winner” — and is sport-specific; a provider’s own name maps once per sport to GTH’s canonical name.',
     ]
   },
   {
-    title: 'Provider Analytics',
-    screen: 'Provider Analytics',
+    title: 'Analytics',
+    screen: 'Analytics',
     body: [
-      'Gross revenue, bet volume, market coverage %, uptime %, latency, and margin impact, per provider.',
-      'Date range presets + custom range, provider filter chips, comparison mode (side-by-side per provider instead of aggregated), CSV export.',
+      'Per-provider gross revenue, bet volume, market coverage %, uptime %, latency and margin impact, with revenue-trend and volume charts.',
+      'Sport / brand / date-range filters, provider filter chips, comparison mode and CSV export.',
+      'Read-only. In the wider platform plan this is a Phase-2 surface (it needs bet-stream data tagged with the active provider); kept live here for review.',
+    ]
+  },
+  {
+    title: 'Audit Log',
+    screen: 'Audit Log',
+    body: [
+      'Every configuration change across the platform — user, timestamp and detail — filterable by area and user, exportable.',
+      'Also carries the Automation Log: the history of system-driven actions (outage fallback, provider recovery, gap coverage).',
     ]
   },
   {
     title: 'AI Assistant',
     screen: 'available on every screen (bottom-right)',
     body: [
-      'Natural-language configuration and queries. Confirms the exact change before applying anything, and links back to the relevant screen afterwards.',
-      'This is a scripted demo (pattern-matched phrasing), not a real LLM integration — it exists to validate the interaction flow described in PRD Journey 6.',
+      'Natural-language configuration and queries; confirms the exact change before applying, and links back to the relevant screen.',
+      'A scripted demo (pattern-matched phrasing), not a real LLM integration — it validates the interaction flow only.',
     ]
   },
   {
-    title: 'Non-functional',
+    title: 'Phase 2 — not built yet',
     body: [
-      'Audit trail: every configuration change is logged (user, timestamp, before/after) — see the Audit Log screen.',
-      'Accessibility / responsiveness / scale targets from the PRD are aspirational for this mock; not something a static prototype can demonstrate.',
-    ]
-  },
-  {
-    title: 'Added beyond the PRD',
-    body: [
-      'This Documentation panel — the PRD didn’t specify how requirements would be communicated to reviewers in-product.',
-      'Audit Log screen — the PRD requires an audit trail but never specified a screen for viewing it.',
-      'Bulk override (Event Overrides) — apply a provider change to many selected events at once.',
-      'Saved filter presets (Event Overrides) — save/re-apply a filter combination.',
-      'Context-aware header search — searches the hierarchy tree on Blending Configuration, events by ID/name on Event Overrides.',
-      'CSV export on Blending Configuration, Provider Mappings, Analytics and the Audit Log.',
+      'Provider Analytics as an official product surface (needs provider-tagged bet-stream data and a fair-comparison method for asymmetric active time).',
+      'Settlement controls (block/freeze settlement per provider / event / globally) and settlement conflict detection.',
     ]
   },
   {
     title: 'Change log',
     body: [
-      '11 Aug 2026 (latest) — Corrected Market Type to mean actual bet types (e.g. "Match Odds", "Race Winner"), not Pre-Match/In-Play — those were mistakenly conflated. Added 5 realistic market types per sport. Fixed the knock-on logic error this exposed: the "Fix this mapping" link for a Pre-Match/In-Play gap now always routes to the Competition-level mapping (the real lever for that gate) instead of a Market Type record, since Market Type mappings are sport-wide and don\'t affect Match Type validation at all.',
-      '11 Aug 2026 — Documentation panel added. Header search made context-aware. Blending Configuration: added Collapse all + CSV export, moved provider selects next to the sport/competition name, added level icons for tree legibility. Event Overrides: fixed saved presets, added override row highlighting, replaced the override drawer with inline editable cells (drawer kept only for bulk override). Automation & Blending renamed to "Automated Actions"; "Blending Rules" tab replaced by a searchable/filterable Automation Log; duplicate alert list removed from Provider Health. Provider Mappings restructured: renamed tabs (Unmapped → Suggested Maps, Rejected → Unmapped), added Competitions/Market Types sub-tabs to Active Mappings and the new Unmapped tab, replaced bulky cards with dense sortable/filterable/exportable tables with structured columns.',
-      '11 Aug 2026 (earlier) — Initial mocked prototype covering all 6 PRD areas.',
+      '1 Sep 2026 (latest) — Removed the inline coverage-gap warning rows from the merged Mappings table (gaps now live only in the Coverage Gaps tab). Renamed Blending’s “Add market override” to “Add override”. Create Override dropped the Scope step — after picking a sport, all target options (competitions, events, market types) appear and scope is inferred. Documentation refreshed to match.',
+      'Aug 2026 — Rebuilt to the Fit Provider Platform cascade (Global → Sport → Group → Competition → Market) with Primary/Secondary blending and independent Pre-Match/In-Play at every level; added group/tier templates. Overrides redesigned (provider-status switches, batch Create Override, cards). Mappings merged Active + Unmapped into one table with an All/Unmapped filter and a Type column; Coverage Gaps became its own tab. Monitoring split — provider status moved to Overrides, coverage gaps to Mappings, and the view is now Analytics-only; the Automation Log moved under Audit Log. New GTThub header + 5-tab shell (Blending · Overrides · Mappings · Analytics · Audit Log).',
+      'Jul–Aug 2026 (earlier) — Initial mocked prototype covering the original PRD areas (Sport→Competition→Phase defaults, per-event overrides, provider mappings, analytics, audit trail).',
     ]
   },
 ];
