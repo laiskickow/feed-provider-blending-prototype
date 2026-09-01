@@ -6,7 +6,7 @@
 <title>Feed Provider Blending &amp; Integration Platform</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Murecho:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=25">
+<link rel="stylesheet" href="styles.css?v=26">
 </head>
 <body>
 <!-- ============ SVG SPRITE — Lucide icons, Ivory stroke scale ============ -->
@@ -304,28 +304,24 @@
       </div>
 
       <div class="tabs">
-        <div class="tab active" data-tab="active">Active Mappings</div>
+        <div class="tab active" data-tab="all">Mappings</div>
         <div class="tab" data-tab="gaps">Coverage Gaps <span class="nav-item__badge" style="margin-left:6px;" id="gaps-tab-badge">0</span></div>
-        <div class="tab" data-tab="unmapped">Unmapped <span class="nav-item__badge" style="margin-left:6px;" id="unmapped-tab-badge">2</span></div>
       </div>
 
-      <!-- ACTIVE MAPPINGS -->
-      <div class="tab-panel active" id="tab-active">
+      <!-- MAPPINGS (merged mapped + unmapped) -->
+      <div class="tab-panel active" id="tab-all">
         <div class="toolbar">
-          <div class="seg" id="seg-active">
-            <button class="seg__btn active" data-level="competition">Competitions</button>
-            <button class="seg__btn" data-level="marketType">Market Types</button>
+          <div class="seg" id="seg-status">
+            <button class="seg__btn active" data-status="all">All</button>
+            <button class="seg__btn" data-status="unmapped">Unmapped</button>
           </div>
-          <span class="muted" style="font-size:11px;">Type in any column to filter · click a header to sort.</span>
+          <span class="muted" style="font-size:11px;">Type in any column to filter · click a header to sort. Competition vs Market Type is the Type column.</span>
           <div class="toolbar__actions">
-            <button class="btn btn-sm btn-tertiary" id="active-export">Export CSV</button>
+            <button class="btn btn-sm btn-tertiary" id="mappings-export">Export CSV</button>
           </div>
         </div>
-        <div class="card" style="overflow:auto;" id="active-comp-wrap">
-          <table class="data-table" id="table-active-competitions"><thead></thead><tbody></tbody></table>
-        </div>
-        <div class="card" style="overflow:auto;display:none;" id="active-mt-wrap">
-          <table class="data-table" id="table-active-markettypes"><thead></thead><tbody></tbody></table>
+        <div class="card" style="overflow:auto;">
+          <table class="data-table" id="table-mappings"><thead></thead><tbody></tbody></table>
         </div>
       </div>
 
@@ -339,25 +335,6 @@
         </div>
       </div>
 
-      <!-- UNMAPPED (unmapped + rejected) -->
-      <div class="tab-panel" id="tab-unmapped">
-        <div class="toolbar">
-          <div class="seg" id="seg-unmapped">
-            <button class="seg__btn active" data-level="competition">Competitions</button>
-            <button class="seg__btn" data-level="marketType">Market Types</button>
-          </div>
-          <span class="muted" style="font-size:11px;">Type in any column to filter · click a header to sort.</span>
-          <div class="toolbar__actions">
-            <button class="btn btn-sm btn-tertiary" id="unmapped-export">Export CSV</button>
-          </div>
-        </div>
-        <div class="card" style="overflow:auto;" id="unmapped-comp-wrap">
-          <table class="data-table" id="table-unmapped-competitions"><thead></thead><tbody></tbody></table>
-        </div>
-        <div class="card" style="overflow:auto;display:none;" id="unmapped-mt-wrap">
-          <table class="data-table" id="table-unmapped-markettypes"><thead></thead><tbody></tbody></table>
-        </div>
-      </div>
     </div>
 
     <!-- ============================================================ -->
@@ -685,8 +662,8 @@
   <div class="ai-messages" id="docs-body" style="display:block;"></div>
 </div>
 
-<script src="data.js?v=25"></script>
-<script src="docs.js?v=25"></script>
-<script src="app.js?v=25"></script>
+<script src="data.js?v=26"></script>
+<script src="docs.js?v=26"></script>
+<script src="app.js?v=26"></script>
 </body>
 </html>

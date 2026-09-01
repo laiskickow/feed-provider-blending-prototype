@@ -210,21 +210,16 @@ function goToMappingFor(providerId, sportId, competitionId, matchType){
   const rec = GTH_MAPPINGS.find(m=> m.provider === providerId && m.status === 'suggested' && m.level === 'competition' && m.suggestion.competitionId === competitionId);
   goToView('mappings');
   if (rec){
-    const state = getTableState('suggested');
-    state.text = competitionId ? competitionName(competitionId) : sportName(sportId);
-    state.provider = providerId;
-    document.getElementById('sugg-search').value = state.text;
-    document.getElementById('sugg-provider').value = providerId;
-    renderSuggestedTab();
     document.getElementById('mappings-suggestions').scrollIntoView({behavior:'smooth', block:'nearest'});
   } else {
-    document.querySelector('#view-mappings .tab[data-tab="unmapped"]').click();
-    setMappingLevel('unmapped','competition');
-    const state = getTableState('unmapped-competitions');
+    document.querySelector('#view-mappings .tab[data-tab="all"]').click();
+    mappingsStatusScope = 'unmapped';
+    document.querySelectorAll('#seg-status .seg__btn').forEach(x=>x.classList.toggle('active', x.dataset.status==='unmapped'));
+    const state = getTableState('mappings');
     state.colFilters = state.colFilters || {};
     state.colFilters.providerSport = sportName(sportId);
-    state.colFilters.providerCompetition = competitionId ? competitionName(competitionId) : '';
-    renderUnmappedCompTab();
+    state.colFilters.providerItem = competitionId ? competitionName(competitionId) : '';
+    renderMappingsTab();
   }
 }
 
@@ -1726,6 +1721,9 @@ function mappingDisplayRow(rec){
     gthMarketType: g && g.marketType ? g.marketType : '',
     confidence: rec.status==='suggested' ? rec.suggestion.confidence : null,
     status: rec.status, rejectReason: rec.rejectReason || '', updated: rec.updated || '', by: rec.by || '',
+    levelLabel: rec.level==='marketType' ? 'Market Type' : 'Competition',
+    providerItem: rec.level==='marketType' ? (rec.providerMarketType||'') : (rec.providerCompetition||''),
+    gthItem: rec.level==='marketType' ? (g&&g.marketType?g.marketType:'') : (g&&g.competitionId?competitionName(g.competitionId):''),
   };
 }
 
@@ -1835,6 +1833,7 @@ function gapWarningRows(tableId, colspan){
   let gaps = [];
   if (tableId==='table-active-competitions') gaps = COVERAGE_GAPS.filter(g=>!/market group/i.test(g.issue));
   else if (tableId==='table-active-markettypes') gaps = COVERAGE_GAPS.filter(g=>/market group/i.test(g.issue));
+  else if (tableId==='table-mappings') gaps = COVERAGE_GAPS;
   else return '';
   return gaps.map(g=>`<tr class="${g.severity==='error'?'row-error':'row-override'}">
     <td colspan="${colspan}">
@@ -1883,7 +1882,12 @@ function renderMappingTable(tableId, columns, rawRows, stateKey, rerender, actio
     if (c.key==='__actions') return `<td>${actionsRenderer(r)}</td>`;
     if (c.key==='providerName') return `<td${gthAttr}><span class="badge badge-gray">${r.providerName}</span></td>`;
     if (c.key==='confidence') return r.confidence==null ? `<td${gthAttr}>—</td>` : `<td${gthAttr}><div class="flex-gap-2"><div class="confidence-bar" style="width:60px;"><div class="confidence-bar__fill" style="width:${r.confidence}%;background:${r.confidence>=85?'var(--green-solid)':'var(--yellow-solid)'};"></div></div><span style="font-size:11px;font-weight:600;">${r.confidence}%</span></div></td>`;
-    if (c.key==='status') return `<td${gthAttr}>${r.status==='rejected'?`<span class="badge badge-yellow">Rejected — ${r.rejectReason}</span>`:'<span class="badge badge-red">Unmapped</span>'}</td>`;
+    if (c.key==='status'){
+      const sb = r.status==='active' ? '<span class="badge badge-green">Active</span>'
+               : r.status==='rejected' ? `<span class="badge badge-yellow">Rejected — ${r.rejectReason}</span>`
+               : '<span class="badge badge-red">Unmapped</span>';
+      return `<td${gthAttr}>${sb}</td>`;
+    }
     return `<td${gthAttr}>${r[c.key] || '—'}</td>`;
   }).join('') + '</tr>').join('');
   tbody.innerHTML = gapWarningRows(tableId, columns.length) + (dataRows || `<tr><td colspan="${columns.length}"><div class="empty-state">Nothing matches these filters.</div></td></tr>`);
@@ -1946,6 +1950,36 @@ const COLS_UNMAPPED_MT = [
   {key:'__actions', label:''},
 ];
 
+let mappingsStatusScope = 'all';
+const COLS_MAPPINGS = [
+  {key:'providerName', rawKey:'provider', label:'Provider', group:'feed', filter:'select', options:providerSelectOptions},
+  {key:'levelLabel', rawKey:'level', label:'Type', group:'feed', filter:'select', options:()=>[{value:'competition',label:'Competition'},{value:'marketType',label:'Market Type'}]},
+  {key:'providerSport', label:'Provider Sport', group:'feed', filter:'text'},
+  {key:'providerItem', label:'Provider Item', group:'feed', filter:'text'},
+  {key:'__connector', label:''},
+  {key:'gthSport', label:'GTH Sport', group:'gth', filter:'text'},
+  {key:'gthItem', label:'GTH Item', group:'gth', filter:'text'},
+  {key:'status', label:'Status', filter:'select', options:()=>[{value:'active',label:'Active'},{value:'unmapped',label:'Unmapped'},{value:'rejected',label:'Rejected'}]},
+  {key:'updated', label:'Last Updated', filter:'text'},
+  {key:'__actions', label:''},
+];
+// Merged Active + Unmapped table. Competition vs Market Type is a filterable
+// column now; the segmented control filters by status (All | Unmapped).
+function renderMappingsTab(){
+  let rows = GTH_MAPPINGS.filter(m=>m.status!=='suggested').map(mappingDisplayRow);
+  if (mappingsStatusScope==='unmapped') rows = rows.filter(r=>r.status==='unmapped'||r.status==='rejected');
+  renderMappingTable('table-mappings', COLS_MAPPINGS, rows, 'mappings', renderMappingsTab, (r)=>{
+    if (r.status==='active') return `<div class="flex-gap-1">
+      <span class="icon-btn" style="width:24px;height:24px;" title="Edit" onclick="openGthSearch('${r.id}')">${ICONS.edit()}</span>
+      <span class="icon-btn" style="width:24px;height:24px;" title="History" onclick="showHistory('${r.id}')">${ICONS.history()}</span>
+      <span class="icon-btn" style="width:24px;height:24px;" title="Delete" onclick="deleteMapping('${r.id}')">${ICONS.trash()}</span>
+    </div>`;
+    return `<div class="flex-gap-1">
+      <button class="btn btn-sm btn-secondary" onclick="openGthSearch('${r.id}')">Map</button>
+      ${r.status==='unmapped' ? `<button class="btn btn-sm btn-tertiary" onclick="openReject('${r.id}')">Reject</button>` : ''}
+    </div>`;
+  });
+}
 function renderSuggestedTab(){
   const display = GTH_MAPPINGS.filter(m=>m.status==='suggested').map(mappingDisplayRow);
   const panel = document.getElementById('mappings-suggestions');
@@ -2049,30 +2083,22 @@ function refreshMappingCounts(){
   if (notif){ const bc = notif.querySelector('.badge-count'); if(bc) bc.style.display = needsAttention===0 ? 'none' : 'flex'; }
 }
 function refreshAllMappingTabs(){
-  renderSuggestedTab(); renderActiveCompTab(); renderActiveMtTab(); renderUnmappedCompTab(); renderUnmappedMtTab(); renderCoverageGapsTab();
+  renderSuggestedTab(); renderMappingsTab(); renderCoverageGapsTab();
   refreshMappingCounts();
 }
 
 // Level segmented toggle (Competitions | Market Types) — replaces nested tabs
-function setMappingLevel(scope, level){
-  document.querySelectorAll(`#seg-${scope} .seg__btn`).forEach(b=> b.classList.toggle('active', b.dataset.level===level));
-  document.getElementById(`${scope}-comp-wrap`).style.display = level==='competition' ? '' : 'none';
-  document.getElementById(`${scope}-mt-wrap`).style.display = level==='marketType' ? '' : 'none';
-}
+// Mappings status segmented toggle (All | Unmapped) — merged mapped+unmapped
 document.querySelector('.main').addEventListener('click', e=>{
-  const b = e.target.closest('.seg__btn'); if(!b) return;
-  setMappingLevel(b.closest('.seg').id.replace('seg-',''), b.dataset.level);
+  const b = e.target.closest('#seg-status .seg__btn'); if(!b) return;
+  mappingsStatusScope = b.dataset.status;
+  document.querySelectorAll('#seg-status .seg__btn').forEach(x=>x.classList.toggle('active', x===b));
+  renderMappingsTab();
 });
-function currentLevel(scope){ return document.querySelector(`#seg-${scope} .seg__btn.active`).dataset.level; }
-document.getElementById('active-export').addEventListener('click', ()=>{
-  const lvl = currentLevel('active');
-  const rows = GTH_MAPPINGS.filter(m=>m.status==='active' && m.level===lvl).map(mappingDisplayRow);
-  exportMappingCSV(rows, lvl==='competition' ? 'active_mappings_competitions.csv' : 'active_mappings_market_types.csv');
-});
-document.getElementById('unmapped-export').addEventListener('click', ()=>{
-  const lvl = currentLevel('unmapped');
-  const rows = GTH_MAPPINGS.filter(m=>(m.status==='unmapped'||m.status==='rejected') && m.level===lvl).map(mappingDisplayRow);
-  exportMappingCSV(rows, lvl==='competition' ? 'unmapped_competitions.csv' : 'unmapped_market_types.csv');
+document.getElementById('mappings-export').addEventListener('click', ()=>{
+  let rows = GTH_MAPPINGS.filter(m=>m.status!=='suggested').map(mappingDisplayRow);
+  if (mappingsStatusScope==='unmapped') rows = rows.filter(r=>r.status==='unmapped'||r.status==='rejected');
+  exportMappingCSV(rows, mappingsStatusScope==='unmapped' ? 'unmapped_mappings.csv' : 'all_mappings.csv');
 });
 // Suggestions panel — filters removed (3a)
 
