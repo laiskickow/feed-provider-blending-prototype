@@ -829,3 +829,12 @@ textarea.input{height:auto;padding:var(--sp-2);resize:vertical;}
 /* Suspended badge */
 .badge-suspended{background:var(--red-subtle);color:var(--red-fg);font-size:10px;font-weight:var(--fw-bold);border-radius:var(--radii-sm);padding:2px 6px;}
 .badge-backup{background:var(--blue-subtle);color:var(--blue-fg);font-size:10px;font-weight:var(--fw-medium);border-radius:var(--radii-sm);padding:2px 6px;}
+
+/* ---- Compact switch (provider quick suspend/active) ---- */
+.switch{display:inline-flex;align-items:center;cursor:pointer;user-select:none;vertical-align:middle;}
+.switch__track{width:34px;height:18px;border-radius:var(--radii-full);background:var(--gray-muted);position:relative;transition:background .15s;flex:none;}
+.switch__knob{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:transform .15s;}
+.switch[aria-checked="true"] .switch__track{background:var(--green-solid);}
+.switch[aria-checked="true"] .switch__knob{transform:translateX(16px);}
+.switch:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px;border-radius:var(--radii-full);}
+.switch__label{font-size:11px;font-weight:var(--fw-semibold);}

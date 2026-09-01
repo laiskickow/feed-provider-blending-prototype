@@ -553,14 +553,7 @@ function renderMarketRows(level, id, sportId, depth){
         ${actionsCell(editKey, pending, remove)}
       </div>`;
   }).join('');
-  const addLine = `
-    <div class="tree-row tree-row--add" style="--depth:${depth};cursor:pointer;" onclick="event.stopPropagation();addMarketRow('${level}','${id}','${sportId}')">
-      <div class="tree-row__lead">
-        ${ic('plus', 16)}
-        <span class="tree-add__label">Add market</span>
-      </div>
-    </div>`;
-  return rows + addLine;
+  return rows;
 }
 
 // Inline-edit state — nodes whose provider cells are currently editable (item 2).
@@ -649,7 +642,7 @@ function renderHierarchyTree(){
             <div class="tree-cell--prov">${roProvider(effInp.value, effInp.source==='own')}</div>`}
           <div class="tree-cell--override">${overrideCell(overridden)}</div>
           <div class="tree-cell--gth">${gth}</div>
-          ${actionsCell(editKey, compPending)}
+          ${actionsCell(editKey, compPending, addMarketBtn('comp', comp.id, sport.id))}
         </div>
         <div class="tree-children ${compOpen?'open':''}" id="comp-${comp.id}">${renderMarketRows('comp', comp.id, sport.id, depth+1)}</div>
       </div>`;
@@ -687,7 +680,7 @@ function renderHierarchyTree(){
             <div class="tree-cell--prov">${roProvider(grpInp||parentInp, !!grpInp)}</div>`}
           <div class="tree-cell--override">${overrideCell(overridden)}</div>
           <div class="tree-cell--gth"></div>
-          ${actionsCell(editKey, grpPending, grpEdit)}
+          ${actionsCell(editKey, grpPending, grpEdit + addMarketBtn('group', group.id, sport.id))}
         </div>
         <div class="tree-children ${grpOpen?'open':''}" id="group-${group.id}">
           ${comps.map(c=>renderComp(c, group, 3)).join('')}
@@ -722,18 +715,18 @@ function renderHierarchyTree(){
           <div class="tree-cell--prov">${roProvider(sportInp||globalInp, !!sportInp)}</div>`}
         <div class="tree-cell--override">${overrideCell(sportOverridden)}</div>
         <div class="tree-cell--gth"></div>
-        ${actionsCell(sportEditKey, sportPending)}
+        ${actionsCell(sportEditKey, sportPending, addMarketBtn('sport', sport.id, sport.id))}
       </div>
       <div class="tree-children ${sportOpen?'open':''}" id="sport-${sport.id}">
-        ${groupsHtml}${ungroupedHtml}
-        ${renderMarketRows('sport', sport.id, sport.id, 2)}
-        <div class="tree-row" style="--depth:2;border-bottom:none;">
+        <div class="tree-row tree-row--new-group" style="--depth:2;border-bottom:none;">
           <div class="tree-row__lead">
             <button class="btn-add-group" onclick="event.stopPropagation();createNewGroup('${sport.id}')">
               ${ic('plus', 14)} New group
             </button>
           </div>
         </div>
+        ${groupsHtml}${ungroupedHtml}
+        ${renderMarketRows('sport', sport.id, sport.id, 2)}
       </div>
     </div>`;
   }).join('') || `<div class="empty-state" style="padding:var(--sp-4)">No sports or competitions match the current filters.</div>`;
@@ -760,6 +753,59 @@ function renderHierarchyTree(){
     if (sel) onHierarchyChange(sel.dataset.key, sel.value);
   });
 })();
+
+// Add-market icon (in the Actions column of Sport / Group / Competition nodes).
+function addMarketBtn(level, id, sportId){
+  return `<button class="icon-btn" onclick="event.stopPropagation();openAddMarketDrawer('${level}','${id}','${sportId}')" title="Add market override">${ic('plus',14)}</button>`;
+}
+
+// Add-market drawer — multi-select markets for this layer + set Pre-Match / In-Play providers.
+let addMarketTarget = null;
+function addMarketNodeName(level, id){
+  return level==='comp' ? SPORTS.flatMap(s=>s.competitions).find(c=>c.id===id)?.name
+       : level==='group' ? GROUPS.find(g=>g.id===id)?.name
+       : SPORTS.find(s=>s.id===id)?.name;
+}
+function openAddMarketDrawer(level, id, sportId){
+  addMarketTarget = { level, id, sportId };
+  const levelLabel = level==='comp' ? 'Competition' : level==='group' ? 'Group' : 'Sport';
+  document.getElementById('add-market-subtitle').textContent = `${levelLabel} · ${addMarketNodeName(level,id) || id}`;
+  const available = (SPORT_MARKET_TYPES[sportId] || []).filter(mt=> !addedMarkets.has(`${level}:${id}:${mt}`));
+  const provOpts = ['<option value="">Inherit (no override)</option>', ...PROVIDERS.map(x=>`<option value="${x.id}">${x.name}</option>`)].join('');
+  document.getElementById('add-market-body').innerHTML = `
+    <p style="font-size:var(--fs-xs);color:var(--fg-muted);margin-bottom:var(--sp-3);">Select the market types to override at this layer, and optionally set the provider they should use for each phase. Leave a provider on \u201cInherit\u201d to fall back to the level above.</p>
+    <div class="grid-2" style="margin-bottom:var(--sp-3);">
+      <div class="field" style="margin:0;"><label>Pre-Match provider</label><select class="select" id="add-market-pre">${provOpts}</select></div>
+      <div class="field" style="margin:0;"><label>In-Play provider</label><select class="select" id="add-market-inp">${provOpts}</select></div>
+    </div>
+    <label class="group-section-label">Markets (${available.length} available)</label>
+    ${available.length ? `<div style="border:1px solid var(--border);border-radius:var(--radii-md);max-height:300px;overflow:auto;">
+      ${available.map(mt=>`<label style="display:flex;gap:var(--sp-2);align-items:center;padding:var(--sp-2) var(--sp-3);border-bottom:1px solid var(--border-subtle);font-size:var(--fs-xs);cursor:pointer;">
+        <input type="checkbox" class="add-mkt-check" value="${mt.replace(/"/g,'&quot;')}"> ${mt}
+      </label>`).join('')}
+    </div>` : '<div class="group-empty">Every market type is already added at this layer.</div>'}`;
+  document.getElementById('add-market-confirm').disabled = available.length===0;
+  openDrawer('drawer-add-market');
+}
+function confirmAddMarket(){
+  if (!addMarketTarget) return;
+  const {level, id} = addMarketTarget;
+  const checked = [...document.querySelectorAll('.add-mkt-check:checked')].map(cb=>cb.value);
+  if (!checked.length){ toast('warning','No markets selected','Pick at least one market to add.'); return; }
+  const pre = document.getElementById('add-market-pre').value || null;
+  const inp = document.getElementById('add-market-inp').value || null;
+  checked.forEach(mt=>{
+    const base = `${level}:${id}:${mt}`;
+    addedMarkets.add(base);
+    if (pre || inp) MARKET_TYPE_DEFAULTS[base] = { prematch: pre, inplay: inp };
+  });
+  openTreeNodes.add(`${level}-${id}`);
+  closeDrawer('drawer-add-market');
+  renderHierarchyTree();
+  const nm = addMarketNodeName(level, id) || id;
+  logAudit('Level 1 — Blending Config','Markets added',`${checked.length} market(s) at ${nm}`);
+  toast('success','Markets added',`${checked.length} market${checked.length!==1?'s':''} at ${nm}`);
+}
 
 // Add-market picker — pick one or more market types to override at a node
 // (Sport / Group / Competition). Each becomes its own market-override row.
@@ -1580,12 +1626,28 @@ function renderProviderStatusPanel(){
       const isSuspended = h.status === 'suspended';
       return `<div class="card" style="padding:var(--sp-3);flex:1;min-width:180px;display:flex;flex-direction:column;gap:var(--sp-2);">
         <div class="flex-gap-2">${providerBadge(p.id)}${isSuspended ? '<span class="badge-suspended">Suspended</span>' : healthBadge(h.status)}</div>
-        ${isSuspended
-          ? `<button class="btn btn-sm btn-primary" onclick="resumeProvider('${p.id}')" style="width:100%;">Resume</button>`
-          : `<button class="btn btn-sm btn-tertiary" onclick="openSuspendModal('${p.id}')" style="width:100%;">Suspend</button>`}
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <span class="switch__label" style="color:${isSuspended?'var(--red-fg)':'var(--green-fg)'};">${isSuspended ? 'Suspended' : 'Active'}</span>
+          <span class="switch" role="switch" tabindex="0" aria-checked="${!isSuspended}" aria-label="${p.name} — toggle active or suspended"
+                onclick="toggleProviderSuspend('${p.id}')"
+                onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault();toggleProviderSuspend('${p.id}');}">
+            <span class="switch__track"><span class="switch__knob"></span></span>
+          </span>
+        </div>
       </div>`;
     }).join('')}
   </div>`;
+}
+// Quick suspend/resume from the Overrides provider-status switch (no modal).
+function toggleProviderSuspend(providerId){
+  const h = PROVIDER_HEALTH[providerId];
+  if (h.status === 'suspended'){ resumeProvider(providerId); return; }
+  const p = providerById(providerId);
+  h.status = 'suspended';
+  h.suspendReason = 'Manual suspension';
+  logAudit('Level 2 — Event Overrides','Provider suspended',`${p.name}: quick suspend`);
+  renderProviderStatusPanel();
+  toast('warning','Provider suspended', p.name);
 }
 
 function openSuspendModal(providerId){
